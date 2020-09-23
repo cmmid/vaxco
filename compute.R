@@ -56,7 +56,7 @@ record_times <- unique(c(1:(365*3), seq(t_vax+365, by=365, length.out = 10)))
 
 mk_waning <- function(baseline_dur_days, ages = 16, age_dur_mods = rep(1, ages) ) {
     rep(
-        ifelse(baseline_dur_days == 0, 0, 365/baseline_dur_days),
+        ifelse(baseline_dur_days == 0, 0, 1/baseline_dur_days),
         ages
     ) / age_dur_mods
 }
