@@ -9,6 +9,9 @@ DB ?= results.sqlite
 ${DB}: build_db.R
 	${R}
 
+setup: setup.R | ${CMPTH}
+	Rscript $< $|
+
 CMPTH ?= ../covidm
 
 DATAPTH ?= .

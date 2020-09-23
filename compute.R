@@ -37,17 +37,10 @@ cm_path <- tail(.args, 1)
 
 # load covidm
 cm_force_rebuild = F;
-cm_build_verbose = T;
-cm_force_shared = F;
+cm_build_verbose = F;
+cm_force_shared = T;
 cm_version = 2;
 source(file.path(cm_path, "R", "covidm.R"))
-
-#' TODO - this will misbehave on HPC - fix along with parameter checking
-# This will recompile covidm with certain components required to run 
-# for this setting and model setup -- this step may need to be done 
-# prior to batch execution of runs to avoid multiple threads trying to 
-# recompile covidm at once.
-cm_source_backend(user_defined = fitS$user_defined)
 
 date_vax <- as.Date(scen.dt$start_timing, origin = "1970-01-01")
 t_vax <- as.numeric(date_vax - as.Date(fitS$par$date0))
