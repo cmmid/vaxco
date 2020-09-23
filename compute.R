@@ -38,15 +38,16 @@ cm_path <- tail(.args, 1)
 # load covidm
 cm_force_rebuild = F;
 cm_build_verbose = T;
-cm_force_shared = T;
+cm_force_shared = F;
 cm_version = 2;
 source(file.path(cm_path, "R", "covidm.R"))
 
-cm_source_backend(user_defined = fitS$user_defined)
+#' TODO - this will misbehave on HPC - fix along with parameter checking
 # This will recompile covidm with certain components required to run 
 # for this setting and model setup -- this step may need to be done 
 # prior to batch execution of runs to avoid multiple threads trying to 
 # recompile covidm at once.
+cm_source_backend(user_defined = fitS$user_defined)
 
 date_vax <- as.Date(scen.dt$start_timing, origin = "1970-01-01")
 t_vax <- as.numeric(date_vax - as.Date(fitS$par$date0))
@@ -65,12 +66,13 @@ fitS$par$pop[[1]]$wn = mk_waning(scen.dt$nat_imm_dur_days)
 
 if (scen.dt$strategy == "campaign") {
     # set parameters for this set of scenario runs
-    fitS$par$pop[[1]]$ev = scen.dt$vax_eff
+    fitS$par$pop[[1]]$ev = rep(scen.dt$vax_eff, 16) #' TODO mods by age?
     fitS$par$pop[[1]]$wv = mk_waning(scen.dt$vax_imm_dur_days)
     
     doses_per_day <- rep(0, 16)
     tar_ages <- scen.dt$from_age:scen.dt$to_age
-    doses_per_day[tar_ages] <- round(scen.dt$doses_per_day/length(tar_ages))
+    #' TODO potentially make demographic sensitive?
+    doses_per_day[tar_ages] <- floor(scen.dt$doses_per_day/length(tar_ages))
     del <- scen.dt$doses_per_day - sum(doses_per_day)
     if (del) {
         del_tar <- scen.dt$from_age:(scen.dt$from_age+del-1)
@@ -83,10 +85,22 @@ if (scen.dt$strategy == "campaign") {
         pops = 0,                    # 0th population
         mode = 'assign',             # assign values to v
         times =     c(t_vax,           t_vax+scen.dt$strategy_str),    # do changes on vax day, vax day + 90
-        values = list(doses_per_day, rep(0, 16))    # 16000 vaccines a day for 180 days, then 32000 a day for 180 days, then no more vaccines
+        values = list(doses_per_day, rep(0, 16))
+        # however many doses a day for strategy_str days, then stop
     )
     
 }
+
+#' TODO check coding?
+#' fitS$par$pop[[1]]$ev <- rep(1, 16)
+# fitS$par$schedule[[2]] = list(   # schedule[[2]] because schedule[[1]] is already occupied
+#     parameter = 'v',             # impact parameter 'v' (vaccines administered per day for each age group)
+#     pops = 0,                    # 0th population
+#     mode = 'assign',             # assign values to v
+#     times =     c(t_vax,           t_vax+scen.dt$strategy_str),    # do changes on vax day, vax day + 90
+#     values = list(doses_per_day*10, rep(0, 16))
+#     # however many doses a day for strategy_str days, then stop
+# )
 
 # sample from posterior to generate runs
 runs = cm_backend_sample_fit_test(
@@ -94,13 +108,21 @@ runs = cm_backend_sample_fit_test(
     fitS$post, scen.dt$n_samples, seed = scen.dt$rng_seed
 )
 
+#' @examples 
+#' require(ggplot2)
+#' plot.dt <- melt(runs[[5]], id.vars = c("run","t","population","group"))
+#' p <- ggplot(plot.dt) + aes(t, value, color=group, group=group) +
+#'   geom_line(data=function(dt) dt[variable == "cases"]) + theme_minimal() +
+#'   coord_cartesian(xlim = c(0, 356)) + geom_vline(xintercept = t_vax)
+
 all = rbindlist(lapply(runs, function (ru) {
-    ru[order(t),
-       { ret <- lapply(
-           .SD[,.SD,.SDcols=-c("S","E","Ip","Is","Ia","R","t","population")],
-           cumsum
-       ); c(list(t=t), ret) },
-       keyby=.(particleId = run, group)
+    ru[order(t), {
+      ret <- lapply(
+        .SD[,.SD,.SDcols=-c("S","E","Ip","Is","Ia","R","t","population")],
+        cumsum
+      )
+      c(list(t=t), ret)
+    }, keyby=.(particleId = run, group)
     ][ t %in% record_times ]
 }))
 
