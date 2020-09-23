@@ -27,7 +27,7 @@ dbSendStatement(
 )
 
 pars.dt <- data.table(expand.grid(
-    setId = 0, particleId = 1:1000
+    setId = 0, particleId = 1:100
 ))
 
 dbWriteTable(
@@ -44,16 +44,53 @@ dbSendStatement(
     "CREATE TABLE scenario (
         id INTEGER PRIMARY KEY,
         setId INTEGER NOT NULL,
-        vaxEff REAL NOT NULL,
-        immuneDurDays REAL NOT NULL
+        strategy TEXT DEFAULT 'campaign',
+        vax_mech TEXT DEFAULT 'infection',
+        eff_mech TEXT DEFAULT 'allornothing',
+        vax_eff REAL,
+        nat_imm_dur_days INTEGER,
+        vax_imm_dur_days INTEGER,
+        start_timing INTEGER,
+        repeat_period INTEGER,
+        repeat_number INTEGER,
+        seasonality TEXT DEFAULT 'none',
+        doses_per_day REAL,
+        strategy_str INTEGER,
+        from_age INTEGER,
+        to_age INTEGER
     )"
 )
 
 scen.dt <- data.table(expand.grid(
     setId = 0,
-    vaxEff = seq(10,90,by=20)/100,
-    immuneDurDays = round(c(0, 1, 2.5, 5, 10)*365)
+    strategy = "campaign",
+    vax_mech = "infection", #' as in, vs infection rather than vs disease
+    eff_mech = "allornothing", #' what does efficacy mean? later consider "leaky"
+    vax_eff = seq(10,90,by=20)/100,
+    nat_imm_dur_days = round(2.5*365),
+    vax_imm_dur_days = round(c(2.5, 5)*365),
+    start_timing = as.Date(c("2020-10-01","2021-01-01")),
+    repeat_period = 0,
+    repeat_number = 0,
+    seasonality = c("none"),
+    doses_per_day = 12000,
+    strategy_str = 90,
+    #' days (for campaign - other interpretations for other strategies)
+    from_age = c(4, 14), # 16+ vs 65+
+    to_age = 16
 ))
+
+scen.dt <- rbind(
+    data.table(expand.grid(
+        setId = 0,
+        strategy = "none",
+        nat_imm_dur_days = scen.dt[, unique(nat_imm_dur_days)],
+        seasonality = scen.dt[, unique(seasonality)],
+        start_timing = scen.dt[, unique(start_timing)]
+    )),
+    scen.dt,
+    fill = TRUE
+)
 
 dbWriteTable(
     conn,
