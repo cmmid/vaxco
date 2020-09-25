@@ -157,11 +157,24 @@ dbWriteTable(
 dbSendStatement(
     conn,
     "CREATE TABLE metrics (
-      id INTEGER,
+      scenarioId INTEGER,
       sampleId INTEGER,
-      name TEXT NOT NULL,
-      value_numeric REAL DEFAULT NULL,
-      value_label TEXT DEFAULT NULL
+      age INTEGER,
+      simday INTEGER,
+      outcome TEXT NOT NULL,
+      value_numeric REAL DEFAULT NULL
+    );"
+)
+
+dbSendStatement(
+  conn,
+  "CREATE TABLE other (
+      scenarioId INTEGER,
+      sampleId INTEGER,
+      age INTEGER,
+      simday INTEGER,
+      outcome TEXT NOT NULL,
+      value_numeric REAL DEFAULT NULL
     );"
 )
 

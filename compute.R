@@ -45,7 +45,9 @@ source(file.path(cm_path, "R", "covidm.R"))
 date_vax <- as.Date(scen.dt$start_timing, origin = "1970-01-01")
 t_vax <- as.numeric(date_vax - as.Date(fitS$par$date0))
 #' first 3 years + vax anniversaries
-record_times <- unique(c(1:(365*3), seq(t_vax+365, by=365, length.out = 10)))
+validation_times <- 1:(365*3)
+anni_times <- seq(t_vax+365, by=365, length.out = 10)
+record_times <- unique(c(validation_times, anni_times))
 
 mk_waning <- function(baseline_dur_days, ages = 16, age_dur_mods = rep(1, ages) ) {
     rep(
@@ -85,15 +87,6 @@ if (scen.dt$strategy == "campaign") {
 }
 
 #' TODO check coding?
-#' fitS$par$pop[[1]]$ev <- rep(1, 16)
-# fitS$par$schedule[[2]] = list(   # schedule[[2]] because schedule[[1]] is already occupied
-#     parameter = 'v',             # impact parameter 'v' (vaccines administered per day for each age group)
-#     pops = 0,                    # 0th population
-#     mode = 'assign',             # assign values to v
-#     times =     c(t_vax,           t_vax+scen.dt$strategy_str),    # do changes on vax day, vax day + 90
-#     values = list(doses_per_day*10, rep(0, 16))
-#     # however many doses a day for strategy_str days, then stop
-# )
 
 # sample from posterior to generate runs
 runs = cm_backend_sample_fit_test(
@@ -115,14 +108,46 @@ all = rbindlist(lapply(runs, function (ru) {
         cumsum
       )
       c(list(t=t), ret)
-    }, keyby=.(particleId = run, group)
+    }, keyby=.(sampleId = run, age = group)
     ][ t %in% record_times ]
 }))
 
-long.dt <- melt(all, id.vars = c("particleId","group","t"))
-long.dt[, name := sprintf("%s_age%i_t%i", variable, group, t) ]
+long.dt <- melt.data.table(
+  all, id.vars = c("sampleId","age","t"), variable.name = "outcome"
+)
 
-write.dt <- long.dt[,.(id = scnid, sampleId = particleId, name, value_numeric = value)]
+write.dt <- long.dt[,.(
+  scenaroId = scnid,
+  sampleId,
+  age,
+  simday = t,
+  outcome,
+  value_numeric = value
+)]
+
+max_retries <- 200
+retries <- 1:max_retries
+
+for (retry in retries) {
+  
+  skip_to_next <- FALSE
+  
+  tryCatch ({
+    
+    conn <- dbConnect(drv, scndb)
+    dbWriteTable(conn, "metrics", write.dt[simday %in% anni_times], append = TRUE)
+    dbWriteTable(conn, "other", write.dt[simday %in% validation_times], append = TRUE)
+    dbDisconnect(conn)
+    
+  }, error = function(err) {
+    
+    skip_to_next <<- TRUE
+    
+  })
+  
+  if (!skip_to_next) break
+
+}
 
 conn <- dbConnect(drv, scndb)
 dbWriteTable(conn, "metrics", write.dt, append = TRUE)
