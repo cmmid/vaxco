@@ -23,11 +23,11 @@ setup: setup.R fit_sindh.qs | ${CMPTH}
 
 db: ${DB}
 
-# this should be set from command line, e.g. `make run ARGID=1`
+# this should be set from command line, e.g. `make run SCNID=01`
 # corresponds to setting the scenario
-SCNID ?= 1
+SCNID ?= 01
 
-run: compute.R ${DATASRC} ${DB} | ${CMPTH}
+run: compute.R ${DATASRC} $(patsubst .,_${SCNID}.,${DB}) | ${CMPTH}
 	Rscript $^ ${SCNID} $|
 
 scenarios.csv: results.sqlite
