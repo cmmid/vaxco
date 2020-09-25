@@ -117,7 +117,7 @@ long.dt <- melt.data.table(
 )
 
 write.dt <- long.dt[,.(
-  scenaroId = scnid,
+  scenarioId = scnid,
   sampleId,
   age,
   simday = t,
