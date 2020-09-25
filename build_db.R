@@ -74,7 +74,7 @@ scen.dt <- data.table(expand.grid(
     repeat_number = 0,
     seasonality = c("none"),
     doses_per_day = 12000,
-    strategy_str = 90,
+    strategy_str = c(90, 365),
     #' days (for campaign - other interpretations for other strategies)
     from_age = c(4, 14), # 16+ vs 65+
     to_age = 16
