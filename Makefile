@@ -1,6 +1,10 @@
 
 -include local.makefile
 
+DRPBXPTH ?= ~/Dropbox
+IDIR = ${DRPBXPTH}/inputs
+ODIR = ${DRPBXPTH}/outputs
+
 R = Rscript $^ $@
 
 DB ?= results.sqlite
@@ -23,3 +27,6 @@ SCNID ?= 1
 
 run: compute.R ${DATASRC} ${DB} | ${CMPTH}
 	Rscript $^ ${SCNID} $|
+
+scenarios.csv: results.sqlite
+	sqlite3 -header -csv $< "SELECT * FROM scenario;" > $@
