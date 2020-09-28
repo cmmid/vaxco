@@ -52,7 +52,7 @@ date_vax <- as.Date(scen.dt$start_timing, origin = "1970-01-01")
 t_vax <- as.numeric(date_vax - as.Date(fitS$par$date0))
 #' first 3 years + vax anniversaries
 validation_times <- seq(7, 365*3, by=7)
-anni_times <- seq(t_vax+365, by=365, length.out = 10)
+anni_times <- seq(t_vax, by=365, length.out = 11)
 record_times <- unique(c(validation_times, anni_times))
 
 mk_waning <- function(baseline_dur_days, ages = 16, age_dur_mods = rep(1, ages) ) {
