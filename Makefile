@@ -27,7 +27,7 @@ setup: setup.R fit_sindh.qs | ${CMPTH}
 
 db: ${CONFDB}
 
-tests: $(patsubst %,${DBPAT},01 02 03 04 05)
+tests: $(patsubst %,${DBPAT},$(shell seq -f%02g 1 65))
 
 # this should be set from command line, e.g. `make run SCNID=01`
 # corresponds to setting the scenario
