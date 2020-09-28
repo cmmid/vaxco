@@ -5,10 +5,11 @@ suppressPackageStartupMessages({
     require(RSQLite)
 })
 
-.args <- if (interactive()) c(
+.debug <- "05"
+.args <- if (interactive()) sprintf(c(
     "fit_sindh.qs", "epi_data.csv", "mob_data.csv",
-    "results.sqlite", "5", "../covidm"
-) else commandArgs(trailingOnly = TRUE)
+    "config.sqlite", "%s", "../covidm", "metrics_%s.sqlite"
+), .debug) else commandArgs(trailingOnly = TRUE)
 
 # load fitted model for Sindh
 fitS = qread(.args[1])
@@ -21,19 +22,24 @@ mob = fread(.args[3])
 scndb <- .args[4]
 scnid <- as.integer(.args[5])
 
+metdb <- tail(.args, 1)
+othdb <- gsub("metrics","other",metdb)
+
 # Scenario parameters
 # TODO what this does not cover yet: any vaccines being disbursed
 # (how many doses to which age groups, when)
 drv <- RSQLite::SQLite()
 conn <- dbConnect(drv, scndb)
 scen.dt <- as.list(data.table(dbReadTable(conn, "scenario"))[id == scnid])
-scen.dt$n_samples <- dbGetQuery(conn, "SELECT max(particleId) FROM sample;")[,1]
+scen.dt$n_samples <- dbGetQuery(conn, "SELECT max(particleId) FROM parameter;")[,1]
+#' @example 
+#' scen.dt$n_samples <- 5
 #' TODO pull from pars table?
 #' also, need to set selections from covidm sampling
 scen.dt$rng_seed <- 0
 dbDisconnect(conn)
 
-cm_path <- tail(.args, 1)
+cm_path <- grep("/covidm$", .args, value = T)
 
 # load covidm
 cm_force_rebuild = F;
@@ -45,7 +51,7 @@ source(file.path(cm_path, "R", "covidm.R"))
 date_vax <- as.Date(scen.dt$start_timing, origin = "1970-01-01")
 t_vax <- as.numeric(date_vax - as.Date(fitS$par$date0))
 #' first 3 years + vax anniversaries
-validation_times <- 1:(365*3)
+validation_times <- seq(7, 365*3, by=7)
 anni_times <- seq(t_vax+365, by=365, length.out = 10)
 record_times <- unique(c(validation_times, anni_times))
 
@@ -126,29 +132,26 @@ write.dt <- long.dt[,.(
 )]
 
 max_retries <- 200
-retries <- 1:max_retries
 
-for (retry in retries) {
-  
-  skip_to_next <- FALSE
-  
-  tryCatch ({
-    
-    conn <- dbConnect(drv, scndb)
-    dbWriteTable(conn, "metrics", write.dt[simday %in% anni_times], append = TRUE)
-    dbWriteTable(conn, "other", write.dt[simday %in% validation_times], append = TRUE)
+dbwrite <- function(target, tablename, dt, retries = max_retries) {
+  for (retry in 1:retries) try({
+    conn <- dbConnect(drv, target)
+    dbSendStatement(
+        conn,
+        sprintf("CREATE TABLE %s (
+          scenarioId INTEGER,
+          sampleId INTEGER,
+          age INTEGER,
+          simday INTEGER,
+          outcome TEXT NOT NULL,
+          value_numeric REAL DEFAULT NULL
+        );", tablename)
+    )
+    dbWriteTable(conn, tablename, dt, append = TRUE)
     dbDisconnect(conn)
-    
-  }, error = function(err) {
-    
-    skip_to_next <<- TRUE
-    
-  })
-  
-  if (!skip_to_next) break
-
+    break
+  }, silent = FALSE)
 }
 
-conn <- dbConnect(drv, scndb)
-dbWriteTable(conn, "metrics", write.dt, append = TRUE)
-dbDisconnect(conn)
+dbwrite(metdb, "metrics", write.dt[simday %in% anni_times])
+dbwrite(othdb, "other", write.dt[simday %in% validation_times])
