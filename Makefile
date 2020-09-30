@@ -3,8 +3,8 @@
 
 DRPBXPTH ?= ~/Dropbox/Covid-WHO-vax
 IDIR = ${DRPBXPTH}/inputs
-ODIR = ${DRPBXPTH}/outputs
-FDIR = ${DRPBXPTH}/figures
+ODIR = ${DRPBXPTH}/outputs/low
+FDIR = ${DRPBXPTH}/figures/low
 
 R = Rscript $^ $@
 Rpipe = Rscript $^ $| $@
@@ -74,6 +74,9 @@ ${FDIR}/incremental.png: fig_incremental.R ${IDIR}/scenarios.rds ${ODIR}/quantil
 	${R}
 
 ${FDIR}/validation.png: fig_validation.R ${IDIR}/scenarios.rds ${ODIR}/validation.rds
+	${R}
+
+${FDIR}/econ_summary.png: fig_econ_summary.R ${ODIR}/outputs/econ_summary_inc.rds
 	${R}
 
 figs: ${FDIR}/incremental.png ${FDIR}/validation.png

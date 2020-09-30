@@ -5,8 +5,8 @@ suppressPackageStartupMessages({
 
 .debug <- "~/Dropbox/Covid-WHO-vax"
 .args <- if (interactive()) sprintf(c(
-    "%s/inputs/config.sqlite", "%s/outputs/metrics_",
-    "%s/outputs/diffs.rds"
+    "%s/inputs/config.sqlite", "%s/outputs/low/metrics_",
+    "%s/outputs/low/baseline.rds"
 ), .debug) else commandArgs(trailingOnly = TRUE)
 
 if (!interactive()) warning(sprintf("invoked with args %s", paste(.args, collapse = " ")))
@@ -26,7 +26,7 @@ baselinescns <- scn[strategy == "none", .(
 )]
 
 keepids <- baselinescns[,
-  sprintf("_(%s)\\.sqlite", paste(sprintf("%02g",id), collapse = "|"))
+  sprintf("_(%s)\\.sqlite", paste(sprintf("%03g",id), collapse = "|"))
 ]
 
 fls <- grep(keepids,

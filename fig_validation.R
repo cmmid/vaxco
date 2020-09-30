@@ -7,13 +7,13 @@ suppressPackageStartupMessages({
 
 .debug <- "~/Dropbox/Covid-WHO-vax"
 .args <- if (interactive()) sprintf(c(
-    "%s/inputs/scenarios.rds", "%s/outputs/validation.rds",
-    "%s/figures/validation.png"
+    "%s/inputs/scenarios.rds", "%s/outputs/low/validation.rds",
+    "%s/figures/low/validation.png"
 ), .debug) else commandArgs(trailingOnly = TRUE)
 
 scn.dt <- rbind(
   readRDS(.args[1]),
-  data.table(id=1:2, start_date=as.Date(c("2020-10-01","2021-01-01"))),
+  data.table(id=1, start_date=as.Date(c("2021-01-01"))),
   fill = TRUE
 )
 
