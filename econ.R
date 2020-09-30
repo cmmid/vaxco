@@ -1,13 +1,25 @@
+update_output = T # only writes out updated rds files if true
 
 require(RSQLite)
 require(data.table)
+require(readr)
 
 # paths
 path.in  <- "~/Dropbox/Covid-WHO-vax/inputs/"
 path.out <- "~/Dropbox/Covid-WHO-vax/outputs/"
 
 # discount rate
-disc.rate <- 0.03
+disc.rate.cost <- 0.03
+disc.rate.yll  <- 0
+
+# load yll data
+
+yll.dt <- data.table(fread(paste0(path.in,"yll_scenarios.csv")))
+if (disc.rate.yll == 0){
+    yll.dt[,l.age.disc := l.age]
+} else {
+    yll.dt[,l.age.disc := (1 - exp(-1*l.age*disc.rate.yll))/disc.rate.yll]  
+}
 
 # load cost inputs
 vac_costs.dt <- data.table(fread(paste0(path.in,"covid_vac_cost_inputs.csv")))
@@ -17,7 +29,7 @@ other_costs <- dcast(other_costs.dt[,c("short_desc","cost")],. ~ short_desc, val
 
 # load epi scenario definitions
 drv <- RSQLite::SQLite()
-conn <- dbConnect(drv, dbname=paste0(path.in,"config.sqlite"))
+conn <- dbConnect(drv, dbname=paste0(path.in,"config_high.sqlite"))
 
 epi_pars.dt  <- data.table(dbReadTable(conn,"parameter"))
 epi_scen.dt  <- data.table(dbReadTable(conn,"scenario"))
@@ -25,7 +37,9 @@ epi_scen.dt  <- data.table(dbReadTable(conn,"scenario"))
 dbDisconnect(conn)
 
 # select epi scenarios starting 01-Jan-21 = 18628
-scen_ids <- epi_scen.dt[start_timing==18628,id] 
+scen_ids <- epi_scen.dt[start_timing==18628,id]
+
+# scen_ids <- c(2,13,122)
 
 #load selected epi scenarios
 epi_outcomes.dt = NULL
@@ -102,12 +116,12 @@ outcomes.dt[anni_year > 0,
                 )
             ]
 
-# vac costs for different price scenarios - year 1 only
+# vac costs for different price scenarios
 
 vac_price <- data.table(vac_price=c("low","med","high")) # vac price scenarios 
 outcomes.dt <- outcomes.dt[,vac_price[],by=names(outcomes.dt)] # combine epi and vac price scenarios
 
-outcomes.dt <- merge ( # join duration campaign for epi scenarios
+outcomes.dt <- merge ( # get vac stragey for epi scenarios
     outcomes.dt, 
     epi_scen.dt[,c("id","strategy_str")],
     by.x = c("scenarioId"),
@@ -115,16 +129,17 @@ outcomes.dt <- merge ( # join duration campaign for epi scenarios
     all.x = TRUE
 )
 
-outcomes.dt <- merge( # join total vac cost based on vac price and campaign duration
+outcomes.dt <- merge( # join total vac cost based on vac price and campaign duration (strategy_str)
     outcomes.dt, 
-    vac_costs.dt[,c("vac_price","duration_days","tot_vac_costs")],
+    vac_costs.dt[,c("vac_price","strategy_str","tot_vac_costs")],
     by.x = c("vac_price","strategy_str"),
-    by.y = c("vac_price","duration_days"),
+    by.y = c("vac_price","strategy_str"),
     all.x = TRUE
 )
 
-outcomes.dt[anni_year != 1 | is.na(tot_vac_costs), tot_vac_costs := 0] # zero vac cost in other years
-    
+outcomes.dt[is.na(tot_vac_costs), tot_vac_costs := 0] # non-vaccine scenarios
+outcomes.dt[anni_year != 1 & strategy_str != 0, tot_vac_costs := 0] # 0 if not year 1, except ongoing
+
 # total costs
 outcomes.dt[,
             cost_total := cost_ERM + cost_comms + cost_trace +cost_test + cost_treat + cost_death + 
@@ -132,10 +147,32 @@ outcomes.dt[,
             ]
 
 # discount total costs
-outcomes.dt[anni_year > 1, disc_factor := 1/(1 + disc.rate)^(anni_year - 1)] # discount factor
-outcomes.dt[anni_year <=1, disc_factor := 1]
+outcomes.dt[anni_year > 1, disc_factor.cost := 1/(1 + disc.rate.cost)^(anni_year - 1)]
+outcomes.dt[anni_year <=1, disc_factor.cost := 1]
 
-outcomes.dt[, cost_total_disc := cost_total * disc_factor]
+outcomes.dt[, cost_total_disc := cost_total * disc_factor.cost]
+
+# ylls
+yll_scen <- data.table(yll_scen=c("high")) # just one scenario for now...
+outcomes.dt <- outcomes.dt[,yll_scen[],by=names(outcomes.dt)] # combine yll scenarios
+
+outcomes.dt <- merge( # join to yll.dt to get discounted age-specific life expectancy
+    outcomes.dt, 
+    yll.dt[,c("age_cat","yll_scenario","l.age.disc")],
+    by.x = c("age","yll_scen"),
+    by.y = c("age_cat","yll_scenario"),
+    all.x = TRUE
+)
+
+# discount ylls
+outcomes.dt[anni_year > 1, disc_factor.yll := 1/(1 + disc.rate.yll)^(anni_year - 1)]
+outcomes.dt[anni_year <=1, disc_factor.yll := 1]
+
+outcomes.dt[anni_year > 0, yll.disc := death_o * l.age.disc * disc_factor.yll]
+
+outcomes.dt[anni_year == 0, yll.disc := 0] # set zero in year 0
+
+# MEMORY PROBLEMS - COULD DROP VARS THAT AREN'T CRITICAL BEYOND THIS POINT
 
 # melt
 outcomes.dt <- melt(outcomes.dt, 
@@ -155,8 +192,11 @@ outcomes.dt <- melt(outcomes.dt,
                                      "cost_death",
                                      "tot_vac_costs",
                                      "cost_total",
-                                     "disc_factor",
-                                     "cost_total_disc"
+                                     "disc_factor.cost",
+                                     "disc_factor.yll",
+                                     "cost_total_disc",
+                                     "l.age.disc",
+                                     "yll.disc"
                     ), 
                     variable.name = "outcome", 
                     value.name = "val"
@@ -168,16 +208,16 @@ outcomes.dt <- outcomes.dt[anni_year > 0,]
 # add cumulative values
 outcomes.dt <- outcomes.dt[,
                            cum_val := cumsum(val),
-                           by = .(scenarioId, sampleId, age, vac_price, outcome)
+                           by = .(scenarioId, sampleId, age, vac_price, yll_scen, outcome)
                            ]
 
 # collapse age structure
 outcomes.dt <- outcomes.dt[,
                            .(val = sum(val), cum_val = sum(cum_val)),
-                           by=.(scenarioId, sampleId, vac_price, anni_year, simday, outcome)
+                           by=.(scenarioId, sampleId, vac_price, yll_scen, anni_year, simday, outcome)
                            ]
 
-write_rds(outcomes.dt, paste0(path.out,"outcomes_tot.rds"))
+if (update_output){write_rds(outcomes.dt, paste0(path.out,"outcomes_tot.rds"))}
 
 # summarise totals
 summary_tot.dt <- outcomes.dt[,
@@ -191,27 +231,27 @@ summary_tot.dt <- outcomes.dt[,
                                   cum_val.lo95 = quantile(cum_val,0.025,na.rm=T),
                                   cum_val.hi95 = quantile(cum_val,0.975,na.rm=T)
                               ),
-                              by = .(scenarioId, vac_price, anni_year, simday, outcome)
+                              by = .(scenarioId, vac_price, yll_scen, anni_year, simday, outcome)
                               ]
 
-write_rds(summary_tot.dt, paste0(path.out,"econ_summary_tot.rds"))
+if (update_output){write_rds(summary_tot.dt, paste0(path.out,"econ_summary_tot.rds"))}
 
 # calculate increment from baseline
 outcomes.dt <- outcomes.dt[order(scenarioId),
                            inc_val := val - val[1],
-                           by=.(sampleId, vac_price, anni_year, simday, outcome)
+                           by=.(sampleId, vac_price, yll_scen, anni_year, simday, outcome)
                            ]
 
 outcomes.dt <- outcomes.dt[order(scenarioId),
                            cum_inc_val := cum_val - cum_val[1],
-                           by=.(sampleId, vac_price, anni_year, simday, outcome)
+                           by=.(sampleId, vac_price, yll_scen, anni_year, simday, outcome)
                            ]
 
 outcomes.dt <- outcomes.dt[scenarioId != 2]   # drop reference scenario from inc results
 outcomes.dt <- outcomes.dt[,val := NULL]      # drop val
 outcomes.dt <- outcomes.dt[,cum_val := NULL]  # drop cum_val
 
-write_rds(outcomes.dt, paste0(path.out,"outcomes_inc.rds"))
+if (update_output){write_rds(outcomes.dt, paste0(path.out,"outcomes_inc.rds"))}
 
 # summarise incremental results
 summary_inc.dt <- outcomes.dt[,
@@ -225,11 +265,50 @@ summary_inc.dt <- outcomes.dt[,
                                   cum_inc_val.lo95 = quantile(cum_inc_val,0.025,na.rm=T),
                                   cum_inc_val.hi95 = quantile(cum_inc_val,0.975,na.rm=T)
                               ),
-                              by = .(scenarioId, vac_price, anni_year, simday, outcome)
+                              by = .(scenarioId, vac_price, yll_scen, anni_year, simday, outcome)
                               ]
 
-write_rds(summary_inc.dt, paste0(path.out,"econ_summary_inc.rds"))
+if (update_output){write_rds(summary_inc.dt, paste0(path.out,"econ_summary_inc.rds"))}
 
+# CALCULATE ICERS USING CUMULATIVE RESULTS FOR ANNI_YEAR 10
 
+# keep only cumulative results for final anniversary
+outcomes.dt <- outcomes.dt[anni_year==10,]
+outcomes.dt <- outcomes.dt[,inc_val := NULL]
 
+outcomes.dt <- outcomes.dt[outcome %in% c("cost_total_disc","yll.disc"),]
+
+# re-cast
+outcomes.dt <- dcast(outcomes.dt,
+                     scenarioId + sampleId + vac_price + yll_scen + anni_year + simday ~ outcome,
+                     value.var = "cum_inc_val"
+)
+
+outcomes.dt <- outcomes.dt[, yll.disc := -1 * yll.disc] # express reduction in yll as a gain
+outcomes.dt <- outcomes.dt[, icer :=  cost_total_disc/yll.disc]
+
+# re-melt
+outcomes.dt <- melt(outcomes.dt, 
+                    measure.vars = c("cost_total_disc",
+                                     "yll.disc",
+                                     "icer"
+                    ), 
+                    variable.name = "outcome", 
+                    value.name = "cum_inc_val"
+)
+
+if (update_output){write_rds(outcomes.dt, paste0(path.out,"outcomes_icer_inc.rds"))}
+
+#summarise incremental results
+summary_icer_inc.dt <- outcomes.dt[,
+                              .(
+                                  cum_inc_val.mn = mean(cum_inc_val),
+                                  cum_inc_val.md = median(cum_inc_val),
+                                  cum_inc_val.lo95 = quantile(cum_inc_val,0.025,na.rm=T),
+                                  cum_inc_val.hi95 = quantile(cum_inc_val,0.975,na.rm=T)
+                              ),
+                              by = .(scenarioId, vac_price, yll_scen, anni_year, simday, outcome)
+                              ]
+
+if (update_output){write_rds(summary_icer_inc.dt, paste0(path.out,"econ_summary_icer_inc.rds"))}
 
