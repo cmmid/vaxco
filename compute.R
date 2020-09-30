@@ -80,12 +80,14 @@ if (scen.dt$strategy == "campaign") {
         doses_per_day[del_tar] <- doses_per_day[del_tar] + 1
     }
     
+    t_end <- ifelse(scen.dt$strategy_str == 0, fitS$par$time1, t_vax+scen.dt$strategy_str)
+    
     ### NEW BIT IS HERE
     fitS$par$schedule[[2]] = list(   # schedule[[2]] because schedule[[1]] is already occupied
         parameter = 'v',             # impact parameter 'v' (vaccines administered per day for each age group)
         pops = 0,                    # 0th population
         mode = 'assign',             # assign values to v
-        times =     c(t_vax,           t_vax+scen.dt$strategy_str),    # do changes on vax day, vax day + 90
+        times =     c(t_vax,           t_end),    # do changes on vax day, vax day + 90
         values = list(doses_per_day, rep(0, 16))
         # however many doses a day for strategy_str days, then stop
     )
