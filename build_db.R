@@ -96,6 +96,25 @@ scen.dt <- data.table(expand.grid(
     to_age = 16
 ))
 
+scen_more.dt <- data.table(expand.grid(
+  setId = 0,
+  strategy = "campaign",
+  vax_mech = "infection", #' as in, vs infection rather than vs disease
+  eff_mech = "allornothing", #' what does efficacy mean? later consider "leaky"
+  vax_eff = seq(10,90,by=20)/100,
+  nat_imm_dur_days = round(2.5*365),
+  vax_imm_dur_days = round(c(2.5, 5)*365),
+  start_timing = as.Date(c("2020-10-01","2021-01-01")),
+  repeat_period = 0,
+  repeat_number = 0,
+  seasonality = c("none"),
+  doses_per_day = 12000,
+  strategy_str = 0, # do indefinitely
+  #' days (for campaign - other interpretations for other strategies)
+  from_age = c(4, 14), # 16+ vs 65+
+  to_age = 16
+))
+
 scen.dt <- rbind(
     data.table(expand.grid(
         setId = 0,
@@ -105,6 +124,7 @@ scen.dt <- rbind(
         start_timing = scen.dt[, unique(start_timing)]
     )),
     scen.dt,
+    scen_more.dt,
     fill = TRUE
 )
 
