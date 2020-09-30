@@ -17,13 +17,13 @@ ODBPAT ?= ${ODIR}/other_%.sqlite
 CMPTH ?= ../covidm
 
 DATAPTH ?= .
-DATASRC := $(addprefix ${DATAPTH}/,fit_sindh.qs epi_data.csv mob_data.csv)
+DATASRC := $(addprefix ${DATAPTH}/,fit_sindh_lower_R0.qs epi_data.csv mob_data.csv)
 
 # TODO add params.json
-${CONFDB}: build_db.R fit_sindh.qs | ${CMPTH} ${IDIR}
+${CONFDB}: build_db.R fit_sindh_lower_R0.qs | ${CMPTH} ${IDIR}
 	${Rpipe}
 
-setup: setup.R fit_sindh.qs | ${CMPTH}
+setup: setup.R fit_sindh_lower_R0.qs | ${CMPTH}
 	Rscript $^ $|
 
 db: ${CONFDB} ${IDIR}/scenarios.csv
