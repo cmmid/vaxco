@@ -24,7 +24,7 @@ fls <- grep("_\\d+\\.sqlite",
     list.files(dirname(.args[2]), basename(.args[2]), full.names = TRUE),
     value = TRUE
 )
-all <- rbindlist(lapply(fls, function(fl) readDBtable(fl)[outcome %in% c("cases", "death_o")]))
+all <- rbindlist(lapply(fls, function(fl) readDBtable(fl)[outcome %in% c("cases", "subclinical", "death_o")]))
 
 comb <- rbind(
   all,
