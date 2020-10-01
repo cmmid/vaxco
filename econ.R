@@ -1,4 +1,4 @@
-update_output = T # only writes out updated rds files if true
+update_output = F # only writes out updated rds files if true
 
 require(RSQLite)
 require(data.table)
@@ -9,22 +9,24 @@ path.in  <- "~/Dropbox/Covid-WHO-vax/inputs/"
 path.out <- "~/Dropbox/Covid-WHO-vax/outputs/"
 
 # discount rate
-disc.rate.cost <- 0.03
-disc.rate.yll  <- 0
+disc.rate.cost  <- 0.03
+disc.rate.daly  <- 0 # must match values available in daly_scenarios.csv currently 0 / 0.03
 
-# load yll data
-
-yll.dt <- data.table(fread(paste0(path.in,"yll_scenarios.csv")))
-if (disc.rate.yll == 0){
-    yll.dt[,l.age.disc := l.age]
-} else {
-    yll.dt[,l.age.disc := (1 - exp(-1*l.age*disc.rate.yll))/disc.rate.yll]  
-}
+# load DALY data
+dalys.dt <- data.table(fread(paste0(path.in,"daly_scenarios.csv")))
 
 # load cost inputs
 vac_costs.dt <- data.table(fread(paste0(path.in,"covid_vac_cost_inputs.csv")))
-other_costs.dt <- data.table(fread(paste0(path.in,"covid_other_cost_inputs.csv")))
 
+vac_costs.dt <- vac_costs.dt[,tot_vac_costs := tot_vac_costs/16] # divide across 16 age bands
+vac_costs.dt <- vac_costs.dt[,total_vac_and_supplies_inc_buffer 
+                             := total_vac_and_supplies_inc_buffer/16] # divide across 16 age bands
+vac_costs.dt <- vac_costs.dt[,total_inc_coldchain 
+                             := total_inc_coldchain/16] # divide across 16 age bands
+vac_costs.dt <- vac_costs.dt[,total_campaign_operational 
+                             := total_campaign_operational/16] # divide across 16 age bands
+
+other_costs.dt <- data.table(fread(paste0(path.in,"covid_other_cost_inputs.csv")))
 other_costs <- dcast(other_costs.dt[,c("short_desc","cost")],. ~ short_desc, value.var = "cost")
 
 # load epi scenario definitions
@@ -142,8 +144,8 @@ outcomes.dt[anni_year != 1 & strategy_str != 0, tot_vac_costs := 0] # 0 if not y
 
 # total costs
 outcomes.dt[,
-            cost_total := cost_ERM + cost_comms + cost_trace +cost_test + cost_treat + cost_death + 
-                tot_vac_costs
+            cost_total := (cost_ERM + cost_comms + cost_trace + cost_test + cost_treat + cost_death 
+            + tot_vac_costs)
             ]
 
 # discount total costs
@@ -152,27 +154,26 @@ outcomes.dt[anni_year <=1, disc_factor.cost := 1]
 
 outcomes.dt[, cost_total_disc := cost_total * disc_factor.cost]
 
-# ylls
-yll_scen <- data.table(yll_scen=c("high")) # just one scenario for now...
-outcomes.dt <- outcomes.dt[,yll_scen[],by=names(outcomes.dt)] # combine yll scenarios
+# DALYS
+daly_scen <- data.table(daly_scen=c("high","low")) 
+outcomes.dt <- outcomes.dt[,daly_scen[],by=names(outcomes.dt)] # combine daly scenarios
 
-outcomes.dt <- merge( # join to yll.dt to get discounted age-specific life expectancy
+# join to dalys.dt to get discounted age-specific dalys
+
+outcomes.dt <- merge(
     outcomes.dt, 
-    yll.dt[,c("age_cat","yll_scenario","l.age.disc")],
-    by.x = c("age","yll_scen"),
-    by.y = c("age_cat","yll_scenario"),
+    dalys.dt[disc.rate == disc.rate.daly,c("age_cat","daly_scenario","dalys")], # match disc.rate
+    by.x = c("age","daly_scen"),
+    by.y = c("age_cat","daly_scenario"),
     all.x = TRUE
 )
 
-# discount ylls
-outcomes.dt[anni_year > 1, disc_factor.yll := 1/(1 + disc.rate.yll)^(anni_year - 1)]
-outcomes.dt[anni_year <=1, disc_factor.yll := 1]
+# further discount lifetime dalys by year of death
+outcomes.dt[anni_year > 1, disc_factor.daly := 1/(1 + disc.rate.daly)^(anni_year - 1)]
+outcomes.dt[anni_year <=1, disc_factor.daly := 1]
 
-outcomes.dt[anni_year > 0, yll.disc := death_o * l.age.disc * disc_factor.yll]
-
-outcomes.dt[anni_year == 0, yll.disc := 0] # set zero in year 0
-
-# MEMORY PROBLEMS - COULD DROP VARS THAT AREN'T CRITICAL BEYOND THIS POINT
+outcomes.dt[anni_year > 0, dalys.disc := death_o * dalys * disc_factor.daly]
+outcomes.dt[anni_year == 0, dalys.disc := 0] # set zero in year 0
 
 # melt
 outcomes.dt <- melt(outcomes.dt, 
@@ -193,10 +194,10 @@ outcomes.dt <- melt(outcomes.dt,
                                      "tot_vac_costs",
                                      "cost_total",
                                      "disc_factor.cost",
-                                     "disc_factor.yll",
+                                     "disc_factor.daly",
                                      "cost_total_disc",
-                                     "l.age.disc",
-                                     "yll.disc"
+                                     "dalys",
+                                     "dalys.disc"
                     ), 
                     variable.name = "outcome", 
                     value.name = "val"
@@ -208,13 +209,13 @@ outcomes.dt <- outcomes.dt[anni_year > 0,]
 # add cumulative values
 outcomes.dt <- outcomes.dt[,
                            cum_val := cumsum(val),
-                           by = .(scenarioId, sampleId, age, vac_price, yll_scen, outcome)
+                           by = .(scenarioId, sampleId, age, vac_price, daly_scen, outcome)
                            ]
 
 # collapse age structure
 outcomes.dt <- outcomes.dt[,
                            .(val = sum(val), cum_val = sum(cum_val)),
-                           by=.(scenarioId, sampleId, vac_price, yll_scen, anni_year, simday, outcome)
+                           by=.(scenarioId, sampleId, vac_price, daly_scen, anni_year, simday, outcome)
                            ]
 
 if (update_output){write_rds(outcomes.dt, paste0(path.out,"outcomes_tot.rds"))}
@@ -231,7 +232,7 @@ summary_tot.dt <- outcomes.dt[,
                                   cum_val.lo95 = quantile(cum_val,0.025,na.rm=T),
                                   cum_val.hi95 = quantile(cum_val,0.975,na.rm=T)
                               ),
-                              by = .(scenarioId, vac_price, yll_scen, anni_year, simday, outcome)
+                              by = .(scenarioId, vac_price, daly_scen, anni_year, simday, outcome)
                               ]
 
 if (update_output){write_rds(summary_tot.dt, paste0(path.out,"econ_summary_tot.rds"))}
@@ -239,12 +240,12 @@ if (update_output){write_rds(summary_tot.dt, paste0(path.out,"econ_summary_tot.r
 # calculate increment from baseline
 outcomes.dt <- outcomes.dt[order(scenarioId),
                            inc_val := val - val[1],
-                           by=.(sampleId, vac_price, yll_scen, anni_year, simday, outcome)
+                           by=.(sampleId, vac_price, daly_scen, anni_year, simday, outcome)
                            ]
 
 outcomes.dt <- outcomes.dt[order(scenarioId),
                            cum_inc_val := cum_val - cum_val[1],
-                           by=.(sampleId, vac_price, yll_scen, anni_year, simday, outcome)
+                           by=.(sampleId, vac_price, daly_scen, anni_year, simday, outcome)
                            ]
 
 outcomes.dt <- outcomes.dt[scenarioId != 2]   # drop reference scenario from inc results
@@ -265,7 +266,7 @@ summary_inc.dt <- outcomes.dt[,
                                   cum_inc_val.lo95 = quantile(cum_inc_val,0.025,na.rm=T),
                                   cum_inc_val.hi95 = quantile(cum_inc_val,0.975,na.rm=T)
                               ),
-                              by = .(scenarioId, vac_price, yll_scen, anni_year, simday, outcome)
+                              by = .(scenarioId, vac_price, daly_scen, anni_year, simday, outcome)
                               ]
 
 if (update_output){write_rds(summary_inc.dt, paste0(path.out,"econ_summary_inc.rds"))}
@@ -276,21 +277,21 @@ if (update_output){write_rds(summary_inc.dt, paste0(path.out,"econ_summary_inc.r
 outcomes.dt <- outcomes.dt[anni_year==10,]
 outcomes.dt <- outcomes.dt[,inc_val := NULL]
 
-outcomes.dt <- outcomes.dt[outcome %in% c("cost_total_disc","yll.disc"),]
+outcomes.dt <- outcomes.dt[outcome %in% c("cost_total_disc","dalys.disc"),]
 
 # re-cast
 outcomes.dt <- dcast(outcomes.dt,
-                     scenarioId + sampleId + vac_price + yll_scen + anni_year + simday ~ outcome,
+                     scenarioId + sampleId + vac_price + daly_scen + anni_year + simday ~ outcome,
                      value.var = "cum_inc_val"
 )
 
-outcomes.dt <- outcomes.dt[, yll.disc := -1 * yll.disc] # express reduction in yll as a gain
-outcomes.dt <- outcomes.dt[, icer :=  cost_total_disc/yll.disc]
+outcomes.dt <- outcomes.dt[, dalys.disc := -1 * dalys.disc] # express as dalys averted
+outcomes.dt <- outcomes.dt[, icer :=  cost_total_disc/dalys.disc]
 
 # re-melt
 outcomes.dt <- melt(outcomes.dt, 
                     measure.vars = c("cost_total_disc",
-                                     "yll.disc",
+                                     "dalys.disc",
                                      "icer"
                     ), 
                     variable.name = "outcome", 
@@ -307,7 +308,7 @@ summary_icer_inc.dt <- outcomes.dt[,
                                   cum_inc_val.lo95 = quantile(cum_inc_val,0.025,na.rm=T),
                                   cum_inc_val.hi95 = quantile(cum_inc_val,0.975,na.rm=T)
                               ),
-                              by = .(scenarioId, vac_price, yll_scen, anni_year, simday, outcome)
+                              by = .(scenarioId, vac_price, daly_scen, anni_year, simday, outcome)
                               ]
 
 if (update_output){write_rds(summary_icer_inc.dt, paste0(path.out,"econ_summary_icer_inc.rds"))}
