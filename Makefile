@@ -3,8 +3,8 @@
 
 DRPBXPTH ?= ~/Dropbox/Covid-WHO-vax
 IDIR = ${DRPBXPTH}/inputs
-ODIR = ${DRPBXPTH}/outputs/low
-FDIR = ${DRPBXPTH}/figures/low
+ODIR = ${DRPBXPTH}/outputs
+FDIR = ${DRPBXPTH}/figures
 
 R = Rscript $^ $@
 Rpipe = Rscript $^ $| $@
@@ -65,6 +65,15 @@ ${ODIR}/quantiles.rds: quantiles.R ${ODIR}/diffs.rds
 ${ODIR}/validation.rds: validation_set.R ${CONFDB} $(wildcard ${OTHPAT}*.sqlite)
 	Rscript $(wordlist 1,2,$^) ${OTHPAT} $@
 
+${ODIR}/dalys.rds: econ_summaries.R \
+$(patsubst %,${IDIR}/%.csv,daly_scenarios covid_vac_cost_inputs covid_other_cost_inputs) \
+${IDIR}/config_high.sqlite $(wildcard ${METPAT}*.sqlite)
+	Rscript $(wordlist 1,5,$^) ${METPAT} ${ODIR}/dalys.rds ${ODIR}/icer.rds ${ODIR}/costs.rds
+
+${ODIR}/costs.rds ${ODIR}/costs_averted.rds ${ODIR}/dalys_averted.rds: ${ODIR}/dalys.rds
+
+econ: ${ODIR}/dalys.rds ${ODIR}/costs.rds
+
 ${IDIR}/scenarios.rds: scenarios.R ${CONFDB}
 	${R}
 
@@ -76,7 +85,7 @@ ${FDIR}/incremental.png: fig_incremental.R ${IDIR}/scenarios.rds ${ODIR}/quantil
 ${FDIR}/validation.png: fig_validation.R ${IDIR}/scenarios.rds ${ODIR}/validation.rds
 	${R}
 
-${FDIR}/econ_summary.png: fig_econ_summary.R ${ODIR}/outputs/econ_summary_inc.rds
+${FDIR}/icer.png: fig_icer.R ${IDIR}/config_high.sqlite ${ODIR}/icer.rds
 	${R}
 
 figs: ${FDIR}/incremental.png ${FDIR}/validation.png
