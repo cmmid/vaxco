@@ -73,25 +73,29 @@ outcomes.dt <- dcast(
 #'  - fraction_home_care - need to exclude various hosp outcomes before applying?
 with(other_costs, outcomes.dt[,
     c("cost_ERM", "cost_comms", "cost_trace", "cost_test", "cost_treat", "cost_death") := list(
-        0 * cost_day_erm + 0 * cost_one_erm, # to update; SRP note: to leave zero for now after speakign to ST-R
-        0 * cost_day_comms,   # to update; SRP note: to leave zero for now after speakign to ST-R
-        cases * 0.69 * 0.1 * 7 * cost_per_traced + 
-        cases * 0.69 * 0.1 * 7 * cost_per_quarantined,
+        0 * cost_day_erm + 0 * cost_one_erm, # to update; SRP note: to leave zero for now after speaking to ST-R
+        0 * cost_day_comms,   # to update; SRP note: to leave zero for now after speaking to ST-R
+        cases * 0.1 * 7 * cost_per_traced + 
+            cases * 0.1 * 7 * cost_per_quarantined,
         # 10 traces per case; to update quarantine; CABP note: why no testing cost w/ tracing?
         # SRP note: updated to match assumptions in costing paper - 69% of cases symptomatic, 
         # 10% of symptomatic cases tested and 7 contacts per tested case. Testing costs are built 
-        # into (updated) assumptions for number tested below. To think about later: use symptomatics
-        # from epi model, adjust assumption on number of contacts per case in high prev. scenarios
+        # into (updated) assumptions for number tested below; SRP update: have dropped the 69% as
+        # cases from epi model ar already just the symptomatic ones; To think about: how does number
+        # of contacts per tested case change under high prev. scenarios?
         # 
-        #(non_icu_severe_i + non_icu_critical_i) * cost_per_test,
-        cases * 0.185 * 11.31 * cost_per_test +
-            cases * 0.69 * 0.1 * 11.31 * cost_per_test,
+        (non_icu_severe_i + non_icu_critical_i) * 11.31 * cost_per_test +
+            (cases - (non_icu_severe_i + non_icu_critical_i)) * 0.1 * 11.31 * cost_per_test, 
         # SRP note: Spoken to ST-R and have updated testing costs above to match the assumption in
         # the costing paper, which assumes a fixed proportion of cases (0.185) are hospitalised and
-        # a fixed ratio of 11.31 people tested per positive case. To think about: how to improve this.
+        # a fixed ratio of 11.31 people tested per positive case.; SRP update: modified this based 
+        # on AV email respose to reflect 11.31 tests per hospitalised case and per 10% of 
+        # non-hospitalised cases
+        #
         (non_icu_severe_p + non_icu_critical_p) * cost_day_treat_general +
             icu_critical_p * cost_day_treat_critical +
             cases * 0.1 * cost_treat_home, # 10% cases treated at home; 
+        #
         # CABP note: 10% should exclude various forms of hosp cases?; SRP note: checked with ST-R
         # and assumption in costing work was 10% of all cases.
         death_o * cost_per_death
