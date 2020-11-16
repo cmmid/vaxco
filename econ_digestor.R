@@ -123,15 +123,29 @@ econ_digestor <- function(epi_scen.dt, epi_base.dt, dalys.dt, econ_pars){
     # add dalys using age-specific values from dalys.dt
     
     with(econ_pars,epi_scen.dt[,
-        dalys := (1/(1 + disc.rate.daly)^(anni_year-1)) *
-            death_o * daly.dt[age_cat == age_cat, dalys]
-    ])
+        dalys := (1/(1 + disc.rate.daly)^(anni_year-1)) * (
+            # dalys per death
+            death_o * daly.dt[age_cat == age_cat, dalys_death] +
+            # dalys per case
+            cases * daly.dt[age_cat == age_cat, dalys_case] +
+            # dalys per hospitalised case in general ward
+            non_icu_severe_i * daly.dt[age_cat == age_cat, dalys_hospital] +
+            # dalys per icu admissions that survive
+            (icu_critical_i - death_o) * daly.dt[age_cat == age_cat, dalys_icu]
+    )])
     
     with(econ_pars,epi_base.dt[,
-        dalys := (1/(1 + disc.rate.daly)^(anni_year-1)) *
-            death_o * daly.dt[age_cat == age_cat, dalys]
-    ])
-
+        dalys := (1/(1 + disc.rate.daly)^(anni_year-1)) * (
+            # dalys per death
+            death_o * daly.dt[age_cat == age_cat, dalys_death] +
+            # dalys per case
+            cases * daly.dt[age_cat == age_cat, dalys_case] +
+            # dalys per hospitalised case in general ward
+            non_icu_severe_i * daly.dt[age_cat == age_cat, dalys_hospital] +
+            # dalys per icu admissions that survive
+            (icu_critical_i - death_o) * daly.dt[age_cat == age_cat, dalys_icu]
+    )])
+    
     # melt costs and dalys
     costs.scen <- melt(
         epi_scen.dt,
