@@ -171,7 +171,7 @@ econ_digestor <- function(epi_scen.dt, epi_base.dt, dalys.dt, econ_pars){
     # sum over age groups
     allage.dt <- function(dt) {
         dt[, .(
-            value = sum(value), cvalue = sum(value), age = "all"
+            value = sum(value), cvalue = sum(cvalue), age = "all"
         ), by=setdiff(names(dt), c("age","value","cvalue"))]
     }
     
@@ -189,7 +189,7 @@ econ_digestor <- function(epi_scen.dt, epi_base.dt, dalys.dt, econ_pars){
         baseline.costs, on=.(sampleId, anni_year, variable, age)
     ][, .(
         scenarioId, sampleId, anni_year, variable, age,
-        incr = i.value - value, cum_incr = i.cvalue - cvalue
+        incr = value - i.value, cum_incr = cvalue - i.cvalue
     )]
     
     baseline.dalys <- sum.dalys.base # can't use sum.dalys.base directly not sure why
@@ -198,7 +198,7 @@ econ_digestor <- function(epi_scen.dt, epi_base.dt, dalys.dt, econ_pars){
         baseline.dalys, on=.(sampleId, anni_year, variable, age)
     ][, .(
         scenarioId, sampleId, anni_year, variable, age,
-        incr = i.value - value, cum_incr = i.cvalue - cvalue
+        incr = value - i.value, cum_incr = cvalue - i.cvalue
     )]
     
     # ICER
