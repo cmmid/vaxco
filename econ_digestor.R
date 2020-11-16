@@ -269,12 +269,12 @@ econ_digestor <- function(epi_scen.dt, epi_base.dt, dalys.dt, econ_pars){
     # Return results
 
     return(list(
-        q.costs.scen.dt = q.costs.scent.dt, # costs under intervention
+        q.costs.scen.dt = q.costs.scen.dt, # costs under intervention
         q.costs.base.dt = q.costs.base.dt,  # costs under base case
         qincr.costs.dt  = qincr.costs.dt,   # incremental costs
-        q.dalys.scen.dt = q.dalys.scent.dt, # dalys under intervention
+        q.dalys.scen.dt = q.dalys.scen.dt, # dalys under intervention
         q.dalys.base.dt = q.dalys.base.dt,  # dalys under base case
-        qincr.dalys.dt  = qincr.dalyss.dt,  # incremental dalys
+        qincr.dalys.dt  = qincr.dalys.dt,  # incremental dalys
         q.icer.dt       = q.icer.dt         # icer cost per daly AVERTED
         
     ))
