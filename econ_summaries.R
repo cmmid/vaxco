@@ -144,7 +144,7 @@ costs.mlt <- melt(
 
 lys.dt <- rbindlist(lapply(dalys.dt[, unique(daly_scenario)], function(ds) {
     d.dt <- dalys.dt[
-        (disc.rate == disc.rate.daly) & (daly_scenario == ds),
+        (disc_rate == disc.rate.daly) & (daly_scenario == ds),
         .(age_cat,daly_scenario,dalys_per_death = dalys)
     ]
     outcomes.dt[d.dt, on=.(age=age_cat)]
@@ -167,7 +167,7 @@ accumulate.dt(costs.mlt)
 
 allage.dt <- function(dt) {
     dt[, .(
-        value = sum(value), cvalue = sum(value), age = "all"
+        value = sum(value), cvalue = sum(cvalue), age = "all"
     ), by=setdiff(names(dt), c("age","value","cvalue"))]
 }
 
