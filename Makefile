@@ -10,14 +10,18 @@ R = Rscript $^ $@
 Rpipe = Rscript $^ $| $@
 Rstarp = Rscript $^ $* $| $@
 
+METPAT ?= ${ODIR}/metrics_
+OTHPAT ?= ${ODIR}/other_
+
 CONFDB ?= ${IDIR}/config.sqlite
-DBPAT ?= ${ODIR}/metrics_%.sqlite
-ODBPAT ?= ${ODIR}/other_%.sqlite
+DBPAT := ${METPAT}%.sqlite
+ODBPAT := ${OTHPAT}%.sqlite
 
 CMPTH ?= ../covidm
 
 DATAPTH ?= .
-DATASRC := $(addprefix ${DATAPTH}/,fit_sindh_lower_R0.qs epi_data.csv mob_data.csv)
+DATASRC := $(addprefix ${DATAPTH}/,fit_sindh.qs epi_data.csv mob_data.csv)
+DATASRCLO := $(addprefix ${DATAPTH}/,fit_sindh_lower_R0.qs epi_data.csv mob_data.csv)
 
 # TODO add params.json
 ${CONFDB}: build_db.R fit_sindh_lower_R0.qs | ${CMPTH} ${IDIR}
@@ -49,9 +53,6 @@ merge: ${ODIR}/all_metrics.sqlite
 
 ${IDIR}/scenarios.csv: ${CONFDB}
 	sqlite3 -header -csv $< "SELECT * FROM scenario;" > $@
-
-METPAT := ${ODIR}/metrics_
-OTHPAT := ${ODIR}/other_
 
 ${ODIR}/diffs.rds: diffs.R ${CONFDB} $(wildcard ${METPAT}*.sqlite)
 	Rscript $(wordlist 1,2,$^) ${METPAT} $@
