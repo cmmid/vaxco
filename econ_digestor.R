@@ -98,10 +98,8 @@ econ_digestor <- function(epi_scen.dt, epi_base.dt, dalys.dt, econ_pars){
                 7 * (cost_hh_treat_home_med_per_day + 
                      cost_hh_treat_home_non_med_per_day) +
             # household: individual and caregiver lost income
-            # TODO: update with prevalent cases or alternative assumption about
-            # days of lost income per case
-            cases * 7 * (cost_hh_individual_income_per_day +
-                               cost_hh_caregiver_income_per_day)
+            cases * (cost_hh_individual_income_per_case +
+                               cost_hh_caregiver_income_per_case)
         )])
         return(scen.dt)
     }
@@ -109,6 +107,31 @@ econ_digestor <- function(epi_scen.dt, epi_base.dt, dalys.dt, econ_pars){
     add_costs(epi_scen.dt,econ_pars) # add costs to intervention scenario
     add_costs(epi_base.dt,econ_pars) # add costs to base case
     
+    # add income loss for cases among working age population
+    
+    # Currently not needed as age-structure and workforce participation are 
+    # already accounted for in the input unit costs.
+                     
+    # with(econ_pars,epi_scen.dt[,
+    #     costs := ifelse(
+    #         age > 3 & age < 14, # aged 15 to 64
+    #         costs + 
+    #         ((1/(1 + disc.rate.cost)^(anni_year-1)) * cases * 7 * 
+    #         (cost_hh_individual_income_per_day + cost_hh_caregiver_income_per_day)),
+    #         costs
+    #     )
+    # ])
+    #         
+    # with(econ_pars,epi_base.dt[,
+    #     costs := ifelse(
+    #         age > 3 & age < 14, # aged 15 to 64
+    #         costs + 
+    #         ((1/(1 + disc.rate.cost)^(anni_year-1)) * cases * 7 * 
+    #         (cost_hh_individual_income_per_day + cost_hh_caregiver_income_per_day)),
+    #         costs
+    #     )
+    # ])                          
+                     
     # add annual vaccine costs for relevant years for vaccine scenarios
     
     with(econ_pars,epi_scen.dt[,
@@ -125,25 +148,25 @@ econ_digestor <- function(epi_scen.dt, epi_base.dt, dalys.dt, econ_pars){
     with(econ_pars,epi_scen.dt[,
         dalys := (1/(1 + disc.rate.daly)^(anni_year-1)) * (
             # dalys per death
-            death_o * daly.dt[age_cat == age_cat, dalys_death] +
+            death_o * dalys.dt[age_cat == age_cat, dalys_death] +
             # dalys per case
-            cases * daly.dt[age_cat == age_cat, dalys_case] +
+            cases * dalys.dt[age_cat == age_cat, dalys_case] +
             # dalys per hospitalised case in general ward
-            non_icu_severe_i * daly.dt[age_cat == age_cat, dalys_hospital] +
+            non_icu_severe_i * dalys.dt[age_cat == age_cat, dalys_hospital] +
             # dalys per icu admissions that survive
-            (icu_critical_i - death_o) * daly.dt[age_cat == age_cat, dalys_icu]
+            (icu_critical_i - death_o) * dalys.dt[age_cat == age_cat, dalys_icu]
     )])
     
     with(econ_pars,epi_base.dt[,
         dalys := (1/(1 + disc.rate.daly)^(anni_year-1)) * (
             # dalys per death
-            death_o * daly.dt[age_cat == age_cat, dalys_death] +
+            death_o * dalys.dt[age_cat == age_cat, dalys_death] +
             # dalys per case
-            cases * daly.dt[age_cat == age_cat, dalys_case] +
+            cases * dalys.dt[age_cat == age_cat, dalys_case] +
             # dalys per hospitalised case in general ward
-            non_icu_severe_i * daly.dt[age_cat == age_cat, dalys_hospital] +
+            non_icu_severe_i * dalys.dt[age_cat == age_cat, dalys_hospital] +
             # dalys per icu admissions that survive
-            (icu_critical_i - death_o) * daly.dt[age_cat == age_cat, dalys_icu]
+            (icu_critical_i - death_o) * dalys.dt[age_cat == age_cat, dalys_icu]
     )])
     
     # melt costs and dalys
