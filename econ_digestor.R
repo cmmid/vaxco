@@ -1,8 +1,8 @@
 
 # ------------------------------------------------------------------------------
 # FUNCTION: econ_digestor 
-# Calculates incremental costs, dalys averted, and ICERS for a given
-# vaccine intervention scenario
+# Calculates incremental costs, dalys averted, and ICERS for a given vaccine
+# intervention scenario
 #
 # Inputs:
 #
@@ -10,11 +10,11 @@
 # epi_base.dt - epi runs for no-vaccine comparator (annual totals)
 # dalys.dt - dt of dalys per age cat - selected to match disc.rate.daly
 # econ_pars - list with: 
-#             cost_vac_annual - annual cost of vaccination program
-#             year_vac_final - the last year to which cost_vac_annual is applied
-#             other health system / household costs, 
-#             disc.rate.cost, 
-#             disc.rate.daly
+#   cost_vac_dose - the cost per dose for the current scenario from covid_vac_costs_per_dose.csv
+#   doses - vector of annual total doses for each anni_year
+#   other health system / household costs for current scenario from covid_other_costs.csv 
+#   disc.rate.cost - discount rate for costs  
+#   disc.rate.daly - discount rate for dalys - should match scenario in dalys.dt
 #
 # ------------------------------------------------------------------------------
 
@@ -106,41 +106,12 @@ econ_digestor <- function(epi_scen.dt, epi_base.dt, dalys.dt, econ_pars){
     
     add_costs(epi_scen.dt,econ_pars) # add costs to intervention scenario
     add_costs(epi_base.dt,econ_pars) # add costs to base case
-    
-    # add income loss for cases among working age population
-    
-    # Currently not needed as age-structure and workforce participation are 
-    # already accounted for in the input unit costs.
-                     
-    # with(econ_pars,epi_scen.dt[,
-    #     costs := ifelse(
-    #         age > 3 & age < 14, # aged 15 to 64
-    #         costs + 
-    #         ((1/(1 + disc.rate.cost)^(anni_year-1)) * cases * 7 * 
-    #         (cost_hh_individual_income_per_day + cost_hh_caregiver_income_per_day)),
-    #         costs
-    #     )
-    # ])
-    #         
-    # with(econ_pars,epi_base.dt[,
-    #     costs := ifelse(
-    #         age > 3 & age < 14, # aged 15 to 64
-    #         costs + 
-    #         ((1/(1 + disc.rate.cost)^(anni_year-1)) * cases * 7 * 
-    #         (cost_hh_individual_income_per_day + cost_hh_caregiver_income_per_day)),
-    #         costs
-    #     )
-    # ])                          
-                     
-    # add annual vaccine costs for relevant years for vaccine scenarios
-    
+              
+    # add discounted vaccine costs for relevant years for vaccine scenarios
+
     with(econ_pars,epi_scen.dt[,
-        costs := ifelse(
-            anni_year > year_vac_final,
-            costs,
-            costs +
-            ((1/(1 + disc.rate.cost)^(anni_year-1)) * death_o * cost_vac_annual)
-        )
+        costs := costs + ( (1/(1 + disc.rate.cost)^(anni_year-1)) * 
+                 doses[[anni_year]] * cost_vac_dose )
     ])
     
     # add dalys using age-specific values from dalys.dt
