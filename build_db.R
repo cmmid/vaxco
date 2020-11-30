@@ -1,12 +1,11 @@
 suppressPackageStartupMessages({
   require(RSQLite)
   require(qs)
-#' require(jsonlite)
   require(data.table)
 })
 
 .args <- if (interactive()) c(
-    "fit_sindh.qs", "../covidm", "config.sqlite"
+    "fit_sindh.qs", "../covidm", "inputs/config.sqlite"
 ) else commandArgs(trailingOnly = TRUE)
 
 fitS = qread(.args[1])
@@ -67,53 +66,68 @@ dbSendStatement(
         nat_imm_dur_days INTEGER,
         vax_imm_dur_days INTEGER,
         start_timing INTEGER,
-        repeat_period INTEGER,
-        repeat_number INTEGER,
+        vax_delay INTEGER,
+        repeat_period INTEGER DEFAULT 0,
+        repeat_number INTEGER DEFAULT 0,
         seasonality TEXT DEFAULT 'none',
         doses_per_day REAL,
         strategy_str INTEGER,
         from_age INTEGER,
-        to_age INTEGER
+        to_age INTEGER,
+        R0 TEXT, contact_matrix TEXT, npis TEXT,
+        susceptibility TEXT, clin_frac TEXT,
+        subclin_inf REAL,
+        horizon INTEGER,
+        birthdeath TEXT, hosp_model TEXT, icu_model TEXT, death_model TEXT
     )"
 )
 
-scen.dt <- data.table(expand.grid(
-    setId = 0,
-    strategy = "campaign",
-    vax_mech = "infection", #' as in, vs infection rather than vs disease
-    eff_mech = "allornothing", #' what does efficacy mean? later consider "leaky"
-    vax_eff = seq(10,90,by=20)/100,
-    nat_imm_dur_days = round(2.5*365),
-    vax_imm_dur_days = round(c(2.5, 5)*365),
-    start_timing = as.Date("2021-01-01"), #as.Date(c("2020-10-01","2021-01-01")),
-    repeat_period = 0,
-    repeat_number = 0,
-    seasonality = c("none"),
-    doses_per_day = 12000,
-    strategy_str = c(0, 90, 365),
-    #' days (for campaign - other interpretations for other strategies)
-    from_age = c(4, 14), # 16+ vs 65+
-    to_age = 16
+baseepi <- list(
+  setId = 0,
+  nat_imm_dur_days = round(c(1, 2.5, 5, Inf)*365),
+  seasonality = c("none"),
+  R0 = "fitted",
+  contact_matrix = "prem et al",
+  npis = "google mobility",
+  susceptibility = "nat med fit",
+  clin_frac = "nat med fit",
+  subclin_inf = 0.5,
+  horizon = 10, #' in years
+  birthdeath = "no",
+  hosp_model = "current", icu_model = "current", death_model = "current"
+)
+
+vaxepi <- c(baseepi, list(
+  strategy = "campaign",
+  vax_mech = "infection", #' as in, vs infection rather than vs disease
+  eff_mech = "allornothing", #' what does efficacy mean? later consider "leaky"
+  vax_eff = seq(30,90,by=20)/100,
+  vax_imm_dur_days = round(c(1, 2.5, 5, Inf)*365),
+  start_timing = as.Date(c("2021-01-01", "2021-04-01")), #as.Date(c("2020-10-01","2021-01-01")),
+  vax_delay = c(0, 30), # immunity onset delay from first dose - manages 1 vs 2 dose courses
+  repeat_period = 0,
+  repeat_number = 0,
+  doses_per_day = c(10, 5)*1e3,
+  strategy_str = c(0, 1, 5)*365,
+  #' days (for 'campaign' - other interpretations for other strategies; 0 == continuous)
+  from_age = c(4, 14), # 15+ vs 65+
+  to_age = 16
 ))
 
 scen.dt <- rbind(
-    data.table(expand.grid(
-        setId = 0,
-        strategy = "none",
-        nat_imm_dur_days = scen.dt[, unique(nat_imm_dur_days)],
-        seasonality = scen.dt[, unique(seasonality)],
-        start_timing = scen.dt[, unique(start_timing)]
-    )),
-    scen.dt,
-    fill = TRUE
+  data.table(do.call(expand.grid, vaxepi)),
+  data.table(do.call(expand.grid, c(baseepi, list(strategy = "none")))),
+  fill = TRUE
 )
 
-dbWriteTable(
+res <- dbWriteTable(
     conn,
     "scenario",
     scen.dt,
     append = TRUE
 )
+
+print(res)
 
 #' max_scen_id <- dbGetQuery(conn, "SELECT max(id) FROM scenario;")[1,1]
 #' 

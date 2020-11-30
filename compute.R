@@ -5,10 +5,10 @@ suppressPackageStartupMessages({
     require(RSQLite)
 })
 
-.debug <- "05"
+.debug <- "001"
 .args <- if (interactive()) sprintf(c(
     "fit_sindh.qs", "epi_data.csv", "mob_data.csv",
-    "config.sqlite", "%s", "../covidm", "metrics_%s.sqlite"
+    "inputs/config.sqlite", "%s", "../covidm", "outputs/%s.rds"
 ), .debug) else commandArgs(trailingOnly = TRUE)
 
 # load fitted model for Sindh
@@ -20,10 +20,11 @@ mob = fread(.args[3])
 
 # TODO fish out scenario
 scndb <- .args[4]
-scnid <- as.integer(.args[5])
 
-metdb <- tail(.args, 1)
-othdb <- gsub("metrics","other",metdb)
+scnid <- as.integer(tail(.args, 3)[1])
+cm_path <- tail(.args, 2)[1]
+outfile <- tail(.args, 1)
+
 
 # Scenario parameters
 # TODO what this does not cover yet: any vaccines being disbursed
@@ -39,8 +40,6 @@ scen.dt$n_samples <- dbGetQuery(conn, "SELECT max(particleId) FROM parameter;")[
 scen.dt$rng_seed <- 0
 dbDisconnect(conn)
 
-cm_path <- grep("/covidm$", .args, value = T)
-
 # load covidm
 cm_force_rebuild = F;
 cm_build_verbose = F;
@@ -51,9 +50,9 @@ source(file.path(cm_path, "R", "covidm.R"))
 date_vax <- as.Date(scen.dt$start_timing, origin = "1970-01-01")
 t_vax <- as.numeric(date_vax - as.Date(fitS$par$date0))
 #' first 3 years + vax anniversaries
-validation_times <- seq(7, 365*3, by=7)
-anni_times <- seq(t_vax, by=365, length.out = 11)
-record_times <- unique(c(validation_times, anni_times))
+# validation_times <- seq(7, 365*3, by=7)
+anni_times <- seq(t_vax, by=365, length.out = scen.dt$horizon+1) #' horizon years + 1
+record_times <- anni_times #unique(c(validation_times, anni_times))
 
 mk_waning <- function(baseline_dur_days, ages = 16, age_dur_mods = rep(1, ages) ) {
     rep(
@@ -62,7 +61,8 @@ mk_waning <- function(baseline_dur_days, ages = 16, age_dur_mods = rep(1, ages) 
     ) / age_dur_mods
 }
 
-fitS$par$time1 = t_vax + 10*365 # 10 years of anniversaries
+fitS$par$time1 = t_vax + max(record_times) # 10 years of anniversaries
+# TODO need fitting w/ the different immunity waning?
 fitS$par$pop[[1]]$wn = mk_waning(scen.dt$nat_imm_dur_days)
 
 if (scen.dt$strategy == "campaign") {
@@ -72,8 +72,9 @@ if (scen.dt$strategy == "campaign") {
     
     doses_per_day <- rep(0, 16)
     tar_ages <- scen.dt$from_age:scen.dt$to_age
+    vp <- fitS$par$pop[[1]]$size[tar_ages]; vp <- vp/sum(vp)
     #' TODO potentially make demographic sensitive?
-    doses_per_day[tar_ages] <- floor(scen.dt$doses_per_day/length(tar_ages))
+    doses_per_day[tar_ages] <- floor(vp*scen.dt$doses_per_day)
     del <- scen.dt$doses_per_day - sum(doses_per_day)
     if (del) {
         del_tar <- scen.dt$from_age:(scen.dt$from_age+del-1)
@@ -82,13 +83,18 @@ if (scen.dt$strategy == "campaign") {
     
     t_end <- ifelse(scen.dt$strategy_str == 0, fitS$par$time1, t_vax+scen.dt$strategy_str)
     
+    covaxIncreaseMult <- c(4, 6, 8)
+    covaxIncreaseDays <- seq(91, by=91, length.out = length(covaxIncreaseMult))
+    
+    dpd <- lapply(c(1, covaxIncreaseMult, 0), function (m) m*doses_per_day)
+    
     ### NEW BIT IS HERE
     fitS$par$schedule[[2]] = list(   # schedule[[2]] because schedule[[1]] is already occupied
         parameter = 'v',             # impact parameter 'v' (vaccines administered per day for each age group)
         pops = 0,                    # 0th population
         mode = 'assign',             # assign values to v
-        times =     c(t_vax,           t_end),    # do changes on vax day, vax day + 90
-        values = list(doses_per_day, rep(0, 16))
+        times =     c(t_vax, covaxIncreaseDays, t_end),    # do changes on vax day, vax day + 90
+        values = dpd
         # however many doses a day for strategy_str days, then stop
     )
     
