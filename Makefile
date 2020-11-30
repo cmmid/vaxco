@@ -6,6 +6,9 @@ IDIR = ${DRPBXPTH}/inputs
 ODIR = ${DRPBXPTH}/outputs
 FDIR = ${DRPBXPTH}/figures
 
+${IDIR} ${ODIR} ${FDIR}:
+	mkdir -p $@
+
 R = Rscript $^ $@
 Rpipe = Rscript $^ $| $@
 Rstarp = Rscript $^ $* $| $@
@@ -38,8 +41,8 @@ tests: $(patsubst %,${DBPAT},$(shell seq -f%02g 1 65))
 # corresponds to setting the scenario
 SCNID ?= 01
 
-${DBPAT}: compute.R ${DATASRC} ${CONFDB} | ${CMPTH}
-	${Rstarp}
+${ODIR}/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH}
+	Rscript $^ $* $|
 
 ${ODBPAT}: ${DBPAT}
 
