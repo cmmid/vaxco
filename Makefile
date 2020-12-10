@@ -20,7 +20,11 @@ CONFDB ?= ${IDIR}/config.sqlite
 DBPAT := ${METPAT}%.sqlite
 ODBPAT := ${OTHPAT}%.sqlite
 
-CMPTH ?= ../covidm
+CMPTH ?= ../covidm-vaxco
+CMURL := git@github.com:nicholasdavies/covidm.git
+
+${CMPATH}:
+	cd $(dir ${CMPATH}); git clone ${CMURL} $(notdir ${CMPATH})
 
 DATAPTH ?= .
 DATASRC := $(addprefix ${DATAPTH}/,fit_sindh.qs epi_data.csv mob_data.csv)
@@ -30,19 +34,20 @@ DATASRCLO := $(addprefix ${DATAPTH}/,fit_sindh_lower_R0.qs epi_data.csv mob_data
 ${CONFDB}: build_db.R fit_sindh_lower_R0.qs | ${CMPTH} ${IDIR}
 	${Rpipe}
 
-setup: setup.R fit_sindh_lower_R0.qs | ${CMPTH}
-	Rscript $^ $|
+setup: setup.R fit_sindh_lower_R0.qs | ${IDIR} ${ODIR} ${FDIR}
+	Rscript $^ ${CMPTH}
 
 db: ${CONFDB} ${IDIR}/scenarios.csv
 
-tests: $(patsubst %,${DBPAT},$(shell seq -f%02g 1 65))
+cleandb:
+	rm ${CONFDB}
 
-# this should be set from command line, e.g. `make run SCNID=01`
-# corresponds to setting the scenario
-SCNID ?= 01
+tests: $(patsubst %,${DBPAT},$(shell seq -f%02g 1 65))
 
 ${ODIR}/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH}
 	Rscript $^ $* $|
+
+testscn: ${ODIR}/001.rds
 
 ${ODBPAT}: ${DBPAT}
 
