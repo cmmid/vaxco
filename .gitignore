@@ -6,3 +6,4 @@ inputs/*
 outputs/*
 figures/*
 .Rhistory
+fit_combined.qs
