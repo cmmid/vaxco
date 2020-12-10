@@ -5,14 +5,11 @@ suppressPackageStartupMessages({
     require(RSQLite)
 })
 
-.debug <- "001"
+.debug <- "003"
 .args <- if (interactive()) sprintf(c(
-    "fit_sindh.qs", "epi_data.csv", "mob_data.csv",
+    "fit_combined.qs", "epi_data.csv", "mob_data.csv",
     "inputs/config.sqlite", "%s", "../covidm-vaxco", "outputs/%s.rds"
 ), .debug) else commandArgs(trailingOnly = TRUE)
-
-# load fitted model for Sindh
-fitS = qread(.args[1])
 
 # load epi & mobility data
 epi = fread(.args[2])
@@ -24,7 +21,6 @@ scndb <- .args[4]
 scnid <- as.integer(tail(.args, 3)[1])
 cm_path <- tail(.args, 2)[1]
 outfile <- tail(.args, 1)
-
 
 # Scenario parameters
 # TODO what this does not cover yet: any vaccines being disbursed
@@ -39,6 +35,11 @@ scen.dt$n_samples <- dbGetQuery(conn, "SELECT max(particleId) FROM parameter;")[
 #' also, need to set selections from covidm sampling
 scen.dt$rng_seed <- 0
 dbDisconnect(conn)
+
+natwaning_key <- sprintf("%.1f", scen.dt$nat_imm_dur_days/365)
+
+# load fitted model for Sindh, match to scenario waning assumption
+fitS = qread(.args[1])[[natwaning_key]]
 
 # load covidm
 cm_force_rebuild = F;
@@ -134,23 +135,7 @@ long.dt <- melt.data.table(
   all_runs, id.vars = c("sampleId","age","t"), variable.name = "outcome"
 )
 
-qtile <- function(
-  v, ps = c(lo95=0.025, lo50=0.25, md=0.5, hi50=0.75, hi95=0.975),
-  withMean = c("mn", NA),
-  fmt = "value.%s"
-) {
-  qs <- quantile(v, probs = ps)
-  names(qs) <- sprintf(fmt, names(ps))
-  if (!is.na(withMean[1])) {
-    mn <- mean(v)
-    names(mn) <- sprintf(fmt, withMean[1])
-    qs <- c(qs, mn)
-  }
-  as.list(qs)
-}
+long.dt[, anni_year := (t %/% 365) - 1 ]
+long.dt$t <- NULL
 
-qs.dt <- long.dt[, qtile(value, fmt = "%s"), by=.(outcome, t, age)]
-qs.dt[, anni_year := (t %/% 365) - 1 ]
-qs.dt$t <- NULL
-
-saveRDS(qs.dt, tail(.args, 1))
+saveRDS(long.dt, tail(.args, 1))
