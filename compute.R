@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
 .debug <- "001"
 .args <- if (interactive()) sprintf(c(
     "fit_sindh.qs", "epi_data.csv", "mob_data.csv",
-    "inputs/config.sqlite", "%s", "../covidm", "outputs/%s.rds"
+    "inputs/config.sqlite", "%s", "../covidm-vaxco", "outputs/%s.rds"
 ), .debug) else commandArgs(trailingOnly = TRUE)
 
 # load fitted model for Sindh
@@ -103,10 +103,25 @@ if (scen.dt$strategy == "campaign") {
 #' TODO check coding?
 
 # sample from posterior to generate runs
-runs = cm_backend_sample_fit_test(
+all_runs = rbindlist(lapply(1:scen.dt$n_samples, function (n) {
+  runs = cm_backend_sample_fit_test(
     cm_translate_parameters(fitS$par),
-    fitS$post, scen.dt$n_samples, seed = scen.dt$rng_seed
-)
+    fitS$post, 1, seed = n
+  )[[1]][order(t), {
+    ret <- lapply(
+      .SD[,.SD,.SDcols=-c("S","E","Ip","Is","Ia","R","t","population","run")],
+      cumsum
+    )
+    c(list(t=t, sampleId = n), ret)
+  }, keyby=.(age = group)
+  ][ t %in% record_times ]
+}))
+
+# this version out-of-memories; possible to reduce mem by reducing times out?
+# runs = cm_backend_sample_fit_test(
+#     cm_translate_parameters(fitS$par),
+#     fitS$post, 1, seed = scen.dt$rng_seed
+# )
 
 #' @examples 
 #' require(ggplot2)
@@ -115,51 +130,27 @@ runs = cm_backend_sample_fit_test(
 #'   geom_line(data=function(dt) dt[variable == "cases"]) + theme_minimal() +
 #'   coord_cartesian(xlim = c(0, 356)) + geom_vline(xintercept = t_vax)
 
-all = rbindlist(lapply(runs, function (ru) {
-    ru[order(t), {
-      ret <- lapply(
-        .SD[,.SD,.SDcols=-c("S","E","Ip","Is","Ia","R","t","population")],
-        cumsum
-      )
-      c(list(t=t), ret)
-    }, keyby=.(sampleId = run, age = group)
-    ][ t %in% record_times ]
-}))
-
 long.dt <- melt.data.table(
-  all, id.vars = c("sampleId","age","t"), variable.name = "outcome"
+  all_runs, id.vars = c("sampleId","age","t"), variable.name = "outcome"
 )
 
-write.dt <- long.dt[,.(
-  scenarioId = scnid,
-  sampleId,
-  age,
-  simday = t,
-  outcome,
-  value_numeric = value
-)]
-
-max_retries <- 200
-
-dbwrite <- function(target, tablename, dt, retries = max_retries) {
-  for (retry in 1:retries) try({
-    conn <- dbConnect(drv, target)
-    dbSendStatement(
-        conn,
-        sprintf("CREATE TABLE %s (
-          scenarioId INTEGER,
-          sampleId INTEGER,
-          age INTEGER,
-          simday INTEGER,
-          outcome TEXT NOT NULL,
-          value_numeric REAL DEFAULT NULL
-        );", tablename)
-    )
-    dbWriteTable(conn, tablename, dt, append = TRUE)
-    dbDisconnect(conn)
-    break
-  }, silent = FALSE)
+qtile <- function(
+  v, ps = c(lo95=0.025, lo50=0.25, md=0.5, hi50=0.75, hi95=0.975),
+  withMean = c("mn", NA),
+  fmt = "value.%s"
+) {
+  qs <- quantile(v, probs = ps)
+  names(qs) <- sprintf(fmt, names(ps))
+  if (!is.na(withMean[1])) {
+    mn <- mean(v)
+    names(mn) <- sprintf(fmt, withMean[1])
+    qs <- c(qs, mn)
+  }
+  as.list(qs)
 }
 
-dbwrite(metdb, "metrics", write.dt[simday %in% anni_times])
-dbwrite(othdb, "other", write.dt[simday %in% validation_times])
+qs.dt <- long.dt[, qtile(value, fmt = "%s"), by=.(outcome, t, age)]
+qs.dt[, anni_year := (t %/% 365) - 1 ]
+qs.dt$t <- NULL
+
+saveRDS(qs.dt, tail(.args, 1))
