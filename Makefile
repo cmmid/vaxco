@@ -27,14 +27,14 @@ ${CMPATH}:
 	cd $(dir ${CMPATH}); git clone ${CMURL} $(notdir ${CMPATH})
 
 DATAPTH ?= .
-DATASRC := $(addprefix ${DATAPTH}/,fit_sindh.qs epi_data.csv mob_data.csv)
-DATASRCLO := $(addprefix ${DATAPTH}/,fit_sindh_lower_R0.qs epi_data.csv mob_data.csv)
+FITS := fit_sindh.qs $(shell cd ${DATAPTH}; ls fit_sindh_waning_*.qs)
+DATASRC := $(addprefix ${DATAPTH}/,fit_combined.qs epi_data.csv mob_data.csv)
 
 # TODO add params.json
-${CONFDB}: build_db.R fit_sindh_lower_R0.qs | ${CMPTH} ${IDIR}
+${CONFDB}: build_db.R $(firstword ${FITS}) | ${CMPTH} ${IDIR}
 	${Rpipe}
 
-setup: setup.R fit_sindh_lower_R0.qs | ${IDIR} ${ODIR} ${FDIR}
+setup: setup.R $(firstword ${FITS}) | ${IDIR} ${ODIR} ${FDIR}
 	Rscript $^ ${CMPTH}
 
 db: ${CONFDB} ${IDIR}/scenarios.csv
@@ -42,7 +42,8 @@ db: ${CONFDB} ${IDIR}/scenarios.csv
 cleandb:
 	rm ${CONFDB}
 
-tests: $(patsubst %,${DBPAT},$(shell seq -f%02g 1 65))
+fit_combined.qs: merge_fits.R ${FITS}
+	${R}
 
 ${ODIR}/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH}
 	Rscript $^ $* $|
