@@ -42,21 +42,20 @@ db: ${CONFDB} ${IDIR}/scenarios.csv
 cleandb:
 	rm ${CONFDB}
 
-fit_combined.qs: merge_fits.R ${FITS}
+${DATAPTH}/fit_combined.qs: merge_fits.R ${FITS}
 	${R}
 
 ${ODIR}/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH}
 	Rscript $^ $* $|
 
+SUMMARIES := ${ODIR}/interventions.rds ${ODIR}/baseline.rds
+
+$(word 1,${SUMMARIES}): rollup.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/*.rds)) | ${ODIR}
+	Rscript $< $| $@
+
+$(word 2,${SUMMARIES}): $(word 1,${SUMMARIES})
+
 testscn: ${ODIR}/001.rds
-
-${ODBPAT}: ${DBPAT}
-
-# TODO make this work
-${ODIR}/all_metrics.sqlite: $(wildcard ${ODIR}/metrics_*.sqlite)
-	cd ${ODIR} && for f in ${ODIR}/metrics_*.sqlite; do echo $$f; done
-
-#	for f in ${ODIR}/metrics_*.sqlite; do sqlite3 .dump $$f | sqlite3 $@; done
 
 merge: ${ODIR}/all_metrics.sqlite
 
