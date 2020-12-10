@@ -18,6 +18,22 @@
 #
 # ------------------------------------------------------------------------------
 
+# Quantiles
+qtile <- function(
+    v, ps = c(lo95=0.025, lo50=0.25, md=0.5, hi50=0.75, hi95=0.975),
+    withMean = c("mn", NA),
+    fmt = "value.%s"
+) {
+    qs <- quantile(v, probs = ps)
+    names(qs) <- sprintf(fmt, names(ps))
+    if (!is.na(withMean[1])) {
+        mn <- mean(v)
+        names(mn) <- sprintf(fmt, withMean[1])
+        qs <- c(qs, mn)
+    }
+    as.list(qs)
+}
+
 econ_digestor <- function(epi_scen.dt, epi_base.dt, dalys.dt, econ_pars){
     
     # divide one-off annual/daily costs across age categories
@@ -216,22 +232,6 @@ econ_digestor <- function(epi_scen.dt, epi_base.dt, dalys.dt, econ_pars){
         allow.cartesian = TRUE
     ]
     icer.dt[, icer := -cum_incr / i.cum_incr ] # -ve as want dalys averted
-    
-    # Quantiles
-    qtile <- function(
-        v, ps = c(lo95=0.025, lo50=0.25, md=0.5, hi50=0.75, hi95=0.975),
-        withMean = c("mn", NA),
-        fmt = "value.%s"
-    ) {
-        qs <- quantile(v, probs = ps)
-        names(qs) <- sprintf(fmt, names(ps))
-        if (!is.na(withMean[1])) {
-            mn <- mean(v)
-            names(mn) <- sprintf(fmt, withMean[1])
-            qs <- c(qs, mn)
-        }
-        as.list(qs)
-    }
     
     q.costs.scen.dt <- sum.costs.scen[,{
         qv <- qtile(value)
