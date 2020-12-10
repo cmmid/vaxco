@@ -102,6 +102,12 @@ if (scen.dt$strategy == "campaign") {
 
 #' TODO check coding?
 
+keepoutcomes <- c(
+  "cases", "death_o",
+  "non_icu_severe_i", "non_icu_critical_i", "icu_critical_i",
+  "non_icu_severe_p", "non_icu_critical_p", "icu_critical_p"
+)
+
 # sample from posterior to generate runs
 all_runs = rbindlist(lapply(1:scen.dt$n_samples, function (n) {
   runs = cm_backend_sample_fit_test(
@@ -109,7 +115,7 @@ all_runs = rbindlist(lapply(1:scen.dt$n_samples, function (n) {
     fitS$post, 1, seed = n
   )[[1]][order(t), {
     ret <- lapply(
-      .SD[,.SD,.SDcols=-c("S","E","Ip","Is","Ia","R","t","population","run")],
+      .SD[,.SD,.SDcols=keepoutcomes],
       cumsum
     )
     c(list(t=t, sampleId = n), ret)
