@@ -5,7 +5,7 @@ suppressPackageStartupMessages({
     require(RSQLite)
 })
 
-.debug <- "003"
+.debug <- "0001"
 .args <- if (interactive()) sprintf(c(
     "fit_combined.qs", "epi_data.csv", "mob_data.csv",
     "inputs/config.sqlite", "%s", "../covidm-vaxco", "outputs/%s.rds"
@@ -33,7 +33,6 @@ scen.dt$n_samples <- dbGetQuery(conn, "SELECT max(particleId) FROM parameter;")[
 #' scen.dt$n_samples <- 5
 #' TODO pull from pars table?
 #' also, need to set selections from covidm sampling
-scen.dt$rng_seed <- 0
 dbDisconnect(conn)
 
 natwaning_key <- sprintf("%.1f", scen.dt$nat_imm_dur_days/365)

@@ -94,7 +94,8 @@ baseepi <- list(
   subclin_inf = 0.5,
   horizon = 10, #' in years
   birthdeath = "no",
-  hosp_model = "current", icu_model = "current", death_model = "current"
+  hosp_model = "current", icu_model = "current", death_model = "current",
+  start_timing = as.Date(c("2021-01-01", "2021-04-01")) # start timing forms reference measurement dates
 )
 
 vaxepi <- c(baseepi, list(
@@ -103,7 +104,6 @@ vaxepi <- c(baseepi, list(
   eff_mech = "allornothing", #' what does efficacy mean? later consider "leaky"
   vax_eff = seq(30,90,by=20)/100,
   vax_imm_dur_days = round(c(1, 2.5, 5, Inf)*365),
-  start_timing = as.Date(c("2021-01-01", "2021-04-01")), #as.Date(c("2020-10-01","2021-01-01")),
   vax_delay = c(0, 30), # immunity onset delay from first dose - manages 1 vs 2 dose courses
   repeat_period = 0,
   repeat_number = 0,

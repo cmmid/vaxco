@@ -46,11 +46,11 @@ ${DATAPTH}/fit_combined.qs: merge_fits.R ${FITS}
 	${R}
 
 ${ODIR}/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH}
-	Rscript $^ $* $|
+	Rscript $^ $* $| $@
 
 SUMMARIES := ${ODIR}/interventions.rds ${ODIR}/baseline.rds
 
-$(word 1,${SUMMARIES}): rollup.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/*.rds)) | ${ODIR}
+$(word 1,${SUMMARIES}): rollup.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/*.rds)) | ${ODIR} ${CONFDB}
 	Rscript $< $| $@
 
 $(word 2,${SUMMARIES}): $(word 1,${SUMMARIES})
