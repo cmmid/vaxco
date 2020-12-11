@@ -107,7 +107,7 @@ vaxepi <- c(baseepi, list(
   vax_delay = c(0, 30), # immunity onset delay from first dose - manages 1 vs 2 dose courses
   repeat_period = 0,
   repeat_number = 0,
-  doses_per_day = c(10, 5)*1e3,
+  doses_per_day = c(8, 12)*1e3,
   strategy_str = c(0, 1, 5)*365,
   #' days (for 'campaign' - other interpretations for other strategies; 0 == continuous)
   from_age = c(4, 14), # 15+ vs 65+
