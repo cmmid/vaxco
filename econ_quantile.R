@@ -143,7 +143,7 @@ econ_digestor <- function(epi.dt, dalys.dt, econ_pars){
     return(agg.dt)
 }
 
-incr.dt <- epi_qs.dt[!is.na(cases.del), .SD, .SDcols = c("id","age","qtile","anni_year", grep("\\.del", names(epi.dt), value = TRUE), "vax_delay","strategy_str","doses_per_day")]
+incr.dt <- epi_qs.dt[!is.na(cases.del), .SD, .SDcols = c("id","age","qtile","anni_year", grep("\\.del", names(epi_qs.dt), value = TRUE), "vax_delay","strategy_str","doses_per_day")]
 names(incr.dt) <- grep("\\.del", names(epi_qs.dt), invert = TRUE, value = TRUE)
 
 both.dt <- rbind(
