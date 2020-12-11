@@ -81,12 +81,26 @@ if (scen.dt$strategy == "campaign") {
         doses_per_day[del_tar] <- doses_per_day[del_tar] + 1
     }
     
+    doses_per_day_later <- rep(0, 16)
+    tar_ages <- 4:scen.dt$to_age
+    vp <- fitS$par$pop[[1]]$size[tar_ages]; vp <- vp/sum(vp)
+    #' TODO potentially make demographic sensitive?
+    doses_per_day_later[tar_ages] <- floor(vp*scen.dt$doses_per_day)
+    del <- scen.dt$doses_per_day - sum(doses_per_day_later)
+    if (del) {
+      del_tar <- 4:(4+del-1)
+      doses_per_day_later[del_tar] <- doses_per_day_later[del_tar] + 1
+    }
+    
     t_end <- ifelse(scen.dt$strategy_str == 0, fitS$par$time1, t_vax+scen.dt$strategy_str)
     
     covaxIncreaseMult <- c(4, 6, 8)
     covaxIncreaseDays <- seq(91, by=91, length.out = length(covaxIncreaseMult))
     
-    dpd <- lapply(c(1, covaxIncreaseMult, 0), function (m) m*doses_per_day)
+    dpd <- lapply(
+      1:(length(covaxIncreaseMult)+2),
+      function (i) c(1, covaxIncreaseMult, 0)[i]*(if (i==1) doses_per_day else doses_per_day_later)
+    )
     
     ### NEW BIT IS HERE
     fitS$par$schedule[[2]] = list(   # schedule[[2]] because schedule[[1]] is already occupied
