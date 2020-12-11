@@ -1,0 +1,7 @@
+scenario,country,dose_per_vial,vac_price,cost_vac_dose
+campaign,pakistan,1,10,12.7
+campaign,pakistan,1,6,7.81
+campaign,pakistan,1,3,4.15
+fixed site,pakistan,1,10,13.05
+fixed site,pakistan,1,6,8.16
+fixed site,pakistan,1,3,4.50
