@@ -38,7 +38,6 @@ econ_digestor <- function(epi_scen.dt, epi_base.dt, dalys.dt, econ_pars){
     
     # divide one-off annual/daily costs across age categories
     age_cats <- epi_scen.dt[, max(age)] 
-    econ_pars[["cost_vac_annual"]] <- econ_pars[["cost_vac_annual"]] / age_cats
     econ_pars[["cost_hs_day_erm"]] <- econ_pars[["cost_hs_day_erm"]] / age_cats
     econ_pars[["cost_hs_one_erm"]] <- econ_pars[["cost_hs_one_erm"]] / age_cats
     econ_pars[["cost_hs_day_comms"]] <- econ_pars[["cost_hs_day_comms"]] / age_cats
