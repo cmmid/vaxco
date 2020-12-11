@@ -48,14 +48,15 @@ ${DATAPTH}/fit_combined.qs: merge_fits.R ${FITS}
 ${ODIR}/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH}
 	Rscript $^ $* $| $@
 
-SUMMARIES := ${ODIR}/interventions.rds ${ODIR}/baseline.rds
-
-$(word 1,${SUMMARIES}): rollup.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/*.rds)) | ${ODIR} ${CONFDB}
+${ODIR}/epi_quantile.rds: epi_quantile.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/*.rds)) | ${ODIR} ${CONFDB}
 	Rscript $< $| $@
 
-$(word 2,${SUMMARIES}): $(word 1,${SUMMARIES})
+ECONDATA := covid_other_costs.csv covid_vac_costs_per_dose.csv daly_scenarios.csv
 
-testscn: ${ODIR}/001.rds
+${ODIR}/econ_quantile.rds: econ_quantile.R ${ODIR}/epi_quantile.rds ${ECONDATA} ${CONFDB}
+	${R}
+
+testscn: $(patsubst %,${ODIR}/%.rds,0001 0002 0003 0004 0005 3076 3077 3078 3079 3080)
 
 merge: ${ODIR}/all_metrics.sqlite
 
