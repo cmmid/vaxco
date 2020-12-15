@@ -4,14 +4,15 @@ suppressPackageStartupMessages({
     require(RSQLite)
 })
 
-.args <- if (interactive()) c(
-    "outputs/epi_quantile.rds",
+.debug <- "~/Dropbox/Covid-WHO-vax/outputs/task_20201210_110000_AD_EP_vaxco-results-noXXXX"
+.args <- if (interactive()) sprintf(c(
+    "%s/epi_quantile.rds",
     "covid_other_costs.csv",
     "covid_vac_costs_per_dose.csv",
     "daly_scenarios.csv",
-    "inputs/config.sqlite",
-    "outputs/econ_quantile.rds"
-) else commandArgs(trailingOnly = TRUE)
+    "%s/config.sqlite",
+    "%s/econ_quantile.rds"
+),.debug) else commandArgs(trailingOnly = TRUE)
 
 readDBtable <- function(fl, tbl = "metrics", drv = RSQLite::SQLite(), flags = SQLITE_RO) {
     conn <- dbConnect(drv, fl, flags = flags)
@@ -60,7 +61,7 @@ econ_digestor <- function(epi.dt, dalys.dt, econ_pars){
     econ_pars[["cost_hs_one_erm"]] <- econ_pars[["cost_hs_one_erm"]] / age_cats
     econ_pars[["cost_hs_day_comms"]] <- econ_pars[["cost_hs_day_comms"]] / age_cats
     
-    add_costs <- function(dt) dt[, costs := with(econ_pars,
+    add_costs <- function(dt) dt[, costs := fifelse(view == "incremental",-1,1)*with(econ_pars,
         # one-off / daily health system response costs
         365 * (cost_hs_day_erm + cost_hs_day_comms) + 
         cost_hs_one_erm +
@@ -96,10 +97,10 @@ econ_digestor <- function(epi.dt, dalys.dt, econ_pars){
         # household: individual and caregiver lost income
         cases * (cost_hh_individual_income_per_case + cost_hh_caregiver_income_per_case)
     )][,
-      costs := with(econ_pars, fifelse(
+      costs := with(econ_pars, costs + fifelse(
           is.na(vax_delay),
-          costs,
-          costs + doses_per_day*doses_per_anniversary[anni_year] *
+          0,
+          doses_per_day*doses_per_anniversary[anni_year]/age_cats *
               ((strategy_str == 0) | (anni_year <= (strategy_str/365))) *
               cost_vac_dose * fifelse(vax_delay == 0, 1, 2)
       ))
@@ -138,7 +139,7 @@ econ_digestor <- function(epi.dt, dalys.dt, econ_pars){
     ]
     
     agg.dt[, icer := NA_real_ ]
-    agg.dt[view == "incremental", icer := -ccosts / cdalys ]
+    agg.dt[view == "incremental", icer := ccosts / cdalys ]
     
     return(agg.dt)
 }
