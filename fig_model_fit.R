@@ -47,7 +47,7 @@ data = melt(data, id.vars = 1:2, variable.name = "ind");
 ccol = "lightslateblue";
 dcol = "coral";
 
-th = theme_cowplot(font_size = 10) + theme(strip.background = element_blank(), strip.placement = "outside")
+th = theme_cowplot(font_size = 10) + theme(strip.background = element_blank(), strip.placement = "outside", plot.title = element_text(size = 10))
 
 plot_cases = ggplot(dyn[ind == "cases" & epi == "reported"]) +
     geom_ribbon(aes(date, ymin = `2.5%`, ymax = `97.5%`, group = variable), fill = ccol) +
