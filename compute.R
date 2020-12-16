@@ -5,7 +5,7 @@ suppressPackageStartupMessages({
     require(RSQLite)
 })
 
-.debug <- "0001"
+.debug <- "1537"
 .args <- if (interactive()) sprintf(c(
     "fit_combined.qs", "epi_data.csv", "mob_data.csv",
     "inputs/config.sqlite", "%s", "../covidm-vaxco", "outputs/%s.rds"
@@ -95,7 +95,7 @@ if (scen.dt$strategy == "campaign") {
     t_end <- ifelse(scen.dt$strategy_str == 0, fitS$par$time1, t_vax+scen.dt$strategy_str)
     
     covaxIncreaseMult <- c(4, 6, 8)
-    covaxIncreaseDays <- seq(91, by=91, length.out = length(covaxIncreaseMult))
+    covaxIncreaseDays <- t_vax + seq(91, by=91, length.out = length(covaxIncreaseMult))
     
     dpd <- lapply(
       1:(length(covaxIncreaseMult)+2),
@@ -107,7 +107,7 @@ if (scen.dt$strategy == "campaign") {
         parameter = 'v',             # impact parameter 'v' (vaccines administered per day for each age group)
         pops = 0,                    # 0th population
         mode = 'assign',             # assign values to v
-        times =     c(t_vax, covaxIncreaseDays, t_end),    # do changes on vax day, vax day + 90
+        times =     c(t_vax, covaxIncreaseDays, t_end) + scen.dt$vax_delay,    # do changes on vax day, vax day + 90
         values = dpd
         # however many doses a day for strategy_str days, then stop
     )
@@ -135,6 +135,8 @@ all_runs = rbindlist(lapply(1:scen.dt$n_samples, function (n) {
     c(list(t=t, sampleId = n), ret)
   }, keyby=.(age = group)
   ][ t %in% record_times ]
+  #[ t < record_times[2] ]
+  #
 }))
 
 # this version out-of-memories; possible to reduce mem by reducing times out?
