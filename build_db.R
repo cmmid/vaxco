@@ -4,9 +4,10 @@ suppressPackageStartupMessages({
   require(data.table)
 })
 
-.args <- if (interactive()) c(
-    "fit_sindh.qs", "../covidm", "inputs/config.sqlite"
-) else commandArgs(trailingOnly = TRUE)
+.debug <- "~/Dropbox/Covid-WHO-vax/outputs"
+.args <- if (interactive()) sprintf(c(
+    "fit_sindh.qs", "../covidm", "%s/config.sqlite"
+), .debug) else commandArgs(trailingOnly = TRUE)
 
 fitS = qread(.args[1])
 

@@ -4,7 +4,7 @@ suppressPackageStartupMessages({
     require(RSQLite)
 })
 
-.debug <- "~/Dropbox/Covid-WHO-vax/outputs/task_20201210_110000_AD_EP_vaxco-results-noXXXX"
+.debug <- "~/Dropbox/Covid-WHO-vax/outputs"
 .args <- if (interactive()) sprintf(c(
     "%s/epi_quantile.rds",
     "covid_other_costs.csv",
