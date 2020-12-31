@@ -16,7 +16,8 @@ Rstarp = Rscript $^ $* $| $@
 METPAT ?= ${ODIR}/metrics_
 OTHPAT ?= ${ODIR}/other_
 
-CONFDB ?= ${IDIR}/config.sqlite
+CONFDB ?= ${ODIR}/config.sqlite
+CONFEXT ?= ${ODIR}/config_ext.sqlite
 DBPAT := ${METPAT}%.sqlite
 ODBPAT := ${OTHPAT}%.sqlite
 
@@ -45,8 +46,15 @@ cleandb:
 ${DATAPTH}/fit_combined.qs: merge_fits.R ${FITS}
 	${R}
 
+${ODIR}/%_ext.rds: compute.R ${DATASRC} ${CONFEXT} | ${CMPTH}
+	Rscript $^ $* $| $@
+
 ${ODIR}/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH}
 	Rscript $^ $* $| $@
+
+intconfig: $(patsubst %,${ODIR}/%.rds,$(shell seq 1 3072))
+baseconfig: $(patsubst %,${ODIR}/%.rds,$(shell seq 3073 3080))
+extendconfig: $(patsubst %,${ODIR}/%_ext.rds,$(shell seq 3081 4616))
 
 ${ODIR}/epi_quantile.rds: epi_quantile.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/*.rds)) | ${ODIR} ${CONFDB}
 	Rscript $< $| $@

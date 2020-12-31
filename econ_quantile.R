@@ -6,12 +6,12 @@ suppressPackageStartupMessages({
 
 .debug <- "~/Dropbox/Covid-WHO-vax/outputs"
 .args <- if (interactive()) sprintf(c(
-    "%s/epi_quantile.rds",
+    "%s/epi_quantile",
     "covid_other_costs.csv",
     "covid_vac_costs_per_dose.csv",
     "daly_scenarios.csv",
-    "%s/config.sqlite",
-    "%s/econ_quantile.rds"
+    "%s/config",
+    "%s/econ_quantile_ext.rds"
 ),.debug) else commandArgs(trailingOnly = TRUE)
 
 readDBtable <- function(fl, tbl = "metrics", drv = RSQLite::SQLite(), flags = SQLITE_RO) {
@@ -21,9 +21,15 @@ readDBtable <- function(fl, tbl = "metrics", drv = RSQLite::SQLite(), flags = SQ
     res
 }
 
-epi_scn <- readDBtable(.args[5], tbl = "scenario")[, .(id, vax_delay, strategy_str, doses_per_day)]
+dbs <- list.files(dirname(.args[5]), basename(.args[5]), full.names = TRUE)
 
-epi_qs.dt <- readRDS(.args[1])[epi_scn, on=.(id)][!is.na(qtile)]
+epi_scn <- rbindlist(lapply(
+  dbs, function(db) readDBtable(db, tbl = "scenario")[, .(id, vax_delay, strategy_str, doses_per_day)])
+)
+
+qs <- list.files(dirname(.args[1]), basename(.args[1]), full.names = TRUE)
+
+epi_qs.dt <- rbindlist(lapply(qs, readRDS))[epi_scn, on=.(id)][!is.na(qtile)]
 
 #' vector of doses 
 doses_yr_1 <- sum(c(1,4,6,8))*365/4 # year 1
