@@ -3,9 +3,9 @@ suppressPackageStartupMessages({
 })
 
 .args <- if (interactive()) c(
-    "fit_sindh.qs", 
-    list.files(pattern = "waning_.+\\.qs$"),
-    "fit_combined.qs"
+    "fitd_sindh.qs", 
+    list.files(pattern = "fitd_.+waning_.+\\.qs$"),
+    "fitd_combined.qs"
 ) else commandArgs(trailingOnly = TRUE)
 
 fls <- head(.args, -1)
@@ -13,7 +13,11 @@ fls <- head(.args, -1)
 nms <- gsub("^.*waning_(.+)\\.qs$","\\1",fls)
 nms[1] <- "Inf"
 
-all_fits <- lapply(fls, qread)
+all_fits <- lapply(fls, function(fl) {
+    res <- qread(fl)
+    res$sample_dynamics <- NULL
+    res
+})
 
 names(all_fits) <- nms
 

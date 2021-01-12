@@ -29,13 +29,14 @@ ${CMPATH}:
 
 DATAPTH ?= .
 FITS := fit_sindh.qs $(shell cd ${DATAPTH}; ls fit_sindh_waning_*.qs)
-DATASRC := $(addprefix ${DATAPTH}/,fit_combined.qs epi_data.csv mob_data.csv)
+DFITS := fitd_sindh.qs $(shell cd ${DATAPTH}; ls fitd_sindh_waning_*.qs)
+DATASRC := $(addprefix ${DATAPTH}/,fitd_combined.qs epi_data.csv mob_data.csv)
 
 # TODO add params.json
-${CONFDB}: build_db.R $(firstword ${FITS}) | ${CMPTH} ${IDIR}
+${CONFDB}: build_db.R $(firstword ${DFITS}) | ${CMPTH} ${IDIR}
 	${Rpipe}
 
-setup: setup.R $(firstword ${FITS}) | ${IDIR} ${ODIR} ${FDIR}
+setup: setup.R $(firstword ${DFITS}) | ${IDIR} ${ODIR} ${FDIR}
 	Rscript $^ ${CMPTH}
 
 db: ${CONFDB} ${IDIR}/scenarios.csv
@@ -44,6 +45,9 @@ cleandb:
 	rm ${CONFDB}
 
 ${DATAPTH}/fit_combined.qs: merge_fits.R ${FITS}
+	${R}
+
+${DATAPTH}/fitd_combined.qs: merge_fits.R ${DFITS}
 	${R}
 
 ${ODIR}/%_ext.rds: compute.R ${DATASRC} ${CONFEXT} | ${CMPTH}
