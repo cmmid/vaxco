@@ -16,7 +16,8 @@ Rstarp = Rscript $^ $* $| $@
 METPAT ?= ${ODIR}/metrics_
 OTHPAT ?= ${ODIR}/other_
 
-CONFDB ?= ${IDIR}/config.sqlite
+CONFDB ?= ${ODIR}/config.sqlite
+CONFEXT ?= ${ODIR}/config_ext.sqlite
 DBPAT := ${METPAT}%.sqlite
 ODBPAT := ${OTHPAT}%.sqlite
 
@@ -28,13 +29,14 @@ ${CMPATH}:
 
 DATAPTH ?= .
 FITS := fit_sindh.qs $(shell cd ${DATAPTH}; ls fit_sindh_waning_*.qs)
-DATASRC := $(addprefix ${DATAPTH}/,fit_combined.qs epi_data.csv mob_data.csv)
+DFITS := fitd_sindh.qs $(shell cd ${DATAPTH}; ls fitd_sindh_waning_*.qs)
+DATASRC := $(addprefix ${DATAPTH}/,fitd_combined.qs epi_data.csv mob_data.csv)
 
 # TODO add params.json
-${CONFDB}: build_db.R $(firstword ${FITS}) | ${CMPTH} ${IDIR}
+${CONFDB}: build_db.R $(firstword ${DFITS}) | ${CMPTH} ${IDIR}
 	${Rpipe}
 
-setup: setup.R $(firstword ${FITS}) | ${IDIR} ${ODIR} ${FDIR}
+setup: setup.R $(firstword ${DFITS}) | ${IDIR} ${ODIR} ${FDIR}
 	Rscript $^ ${CMPTH}
 
 db: ${CONFDB} ${IDIR}/scenarios.csv
@@ -45,8 +47,18 @@ cleandb:
 ${DATAPTH}/fit_combined.qs: merge_fits.R ${FITS}
 	${R}
 
+${DATAPTH}/fitd_combined.qs: merge_fits.R ${DFITS}
+	${R}
+
+${ODIR}/%_ext.rds: compute.R ${DATASRC} ${CONFEXT} | ${CMPTH}
+	Rscript $^ $* $| $@
+
 ${ODIR}/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH}
 	Rscript $^ $* $| $@
+
+intconfig: $(patsubst %,${ODIR}/%.rds,$(shell seq 1 3072))
+baseconfig: $(patsubst %,${ODIR}/%.rds,$(shell seq 3073 3080))
+extendconfig: $(patsubst %,${ODIR}/%_ext.rds,$(shell seq 3081 4616))
 
 ${ODIR}/epi_quantile.rds: epi_quantile.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/*.rds)) | ${ODIR} ${CONFDB}
 	Rscript $< $| $@

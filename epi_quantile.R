@@ -4,9 +4,9 @@ suppressPackageStartupMessages({
     require(RSQLite)
 })
 
-.debug <- "outputs"
+.debug <- "~/Dropbox/Covid-WHO-vax/outputs"
 .args <- if (interactive()) sprintf(c(
-    "%s", "inputs/config.sqlite", "%s/epi_quantile.rds"
+    "%s", "%s/config.sqlite", "%s/epi_quantile.rds"
 ), .debug) else commandArgs(trailingOnly = TRUE)
 
 readDBtable <- function(fl, tbl = "metrics", drv = RSQLite::SQLite(), flags = SQLITE_RO) {
