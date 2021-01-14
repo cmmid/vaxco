@@ -6,12 +6,12 @@ suppressPackageStartupMessages({
 
 .debug <- "~/Dropbox/Covid-WHO-vax/outputs"
 .args <- if (interactive()) sprintf(c(
-    "%s/epi_quantile",
+    "%s/epi_quantile.rds",
     "covid_other_costs.csv",
     "covid_vac_costs_per_dose.csv",
     "daly_scenarios.csv",
-    "%s/config",
-    "%s/econ_quantile_ext.rds"
+    "%s/config.sqlite",
+    "%s/econ_quantile.rds"
 ),.debug) else commandArgs(trailingOnly = TRUE)
 
 readDBtable <- function(fl, tbl = "metrics", drv = RSQLite::SQLite(), flags = SQLITE_RO) {
