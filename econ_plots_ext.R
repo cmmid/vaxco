@@ -15,7 +15,7 @@ path.fig <- "~/Dropbox/Covid-WHO-vax/figures/"
 
 # load epi scenario info
 drv <- RSQLite::SQLite()
-conn <- dbConnect(drv, dbname=paste0(path.out,"config_ext.sqlite"))
+conn <- dbConnect(drv, dbname=paste0(path.out,"config.sqlite"))
 epi_scen.dt  <- data.table(dbReadTable(conn,"scenario"))
 
 dbDisconnect(conn)
@@ -38,8 +38,8 @@ econ_scen.dt <- data.table(expand.grid(
 
 # load results
 
-epi.dt <- data.table(readRDS(paste0(path.out,"epi_quantile_ext.rds")))
-econ.dt <- data.table(readRDS(paste0(path.out,"econ_quantile_ext.rds")))
+epi.dt <- data.table(readRDS(paste0(path.out,"epi_quantile.rds")))
+econ.dt <- data.table(readRDS(paste0(path.out,"econ_quantile.rds")))
 
 epi.dt <- epi.dt[qtile %in% c("lo95","md","hi95")]
 econ.dt <- econ.dt[qtile %in% c("lo95","md","hi95") & # drop unused qtiles
@@ -163,6 +163,8 @@ plots.dt <- econ.dt[plots.dt,on=n]
 plots.dt[strategy_str==0,strategy_str:=3650]
 plots.dt[order(strategy_str)]
 
+refdate <- as.Date("2021-04-01")
+plots.dt[, anni_date := anni_year*365 + refdate ]
 # plot of incremental costs
 
 plt.costs <- function(meas = "costs_md", 
@@ -187,14 +189,17 @@ plt.costs <- function(meas = "costs_md",
         )
     ) +
     aes(
-        anni_year, color = vac_price,
+        anni_date, color = vac_price,
         linetype = factor(perspective),
         group = interaction(vac_price, perspective)
     ) +
     geom_line(aes(y=get(meas))) +
     theme_minimal() +
     theme(legend.position="top") +
-    theme(panel.border=element_rect(colour = "black", fill=NA, size=1)) +
+    theme(
+        panel.border=element_rect(colour = "black", fill=NA, size=0.5),
+        panel.grid.minor = element_blank()
+    ) +
     scale_color_gradient2(
         "Vaccine price",
         breaks = c(3,6,10),
@@ -210,9 +215,10 @@ plt.costs <- function(meas = "costs_md",
         name = "Cost perspective",
         labels = c("Health system", "Societal")
     ) +
-    scale_x_continuous(
-        "Years since programme start",
-        breaks = 0:t_horizon, guide = if (showX) "axis" else "none"
+    scale_x_date(
+        "Calendar Year",
+        breaks = refdate + (1:10)*365,
+        date_labels = "'%y"
     ) +
     scale_y_continuous(
         sprintf("%s", lbl), labels = scales::label_number_si()
@@ -245,14 +251,17 @@ plt.dalys <- function(meas = "dalys_md",
         )
     ) +
     aes(
-        anni_year, color = disc.dalys,
+        anni_date, color = disc.dalys,
         linetype = factor(daly_scenario),
         group = interaction(disc.dalys, daly_scenario)
     ) +
     geom_line(aes(y=get(meas))) +
     theme_minimal() +
     theme(legend.position="top") +
-    theme(panel.border=element_rect(colour = "black", fill=NA, size=1)) +
+    theme(
+        panel.border=element_rect(colour = "black", fill=NA, size=0.5),
+        panel.grid.minor = element_blank()
+    ) +
     scale_color_continuous(
         "Discount rate",
         labels = c("0%", "3%"),
@@ -265,9 +274,10 @@ plt.dalys <- function(meas = "dalys_md",
         labels = c("The same as the\ngeneral population", 
                    "Higher than the \ngeneral population")
     ) +
-    scale_x_continuous(
-        "Years since programme start",
-        breaks = 0:t_horizon, guide = if (showX) "axis" else "none"
+    scale_x_date(
+        "Calendar Year",
+        breaks = refdate + (1:10)*365,
+        date_labels = "'%y"
     ) +
     scale_y_continuous(
         sprintf("%s", lbl), labels = scales::label_number_si()
