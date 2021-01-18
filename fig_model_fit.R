@@ -23,53 +23,108 @@ source(file.path(cm_path, "R", "covidm.R"))
 comb.fits <- qread(.args[1])
 
 all.dyn <- rbindlist(mapply(function(ft, nm) {
+    ft$par$deterministic <- FALSE
+    
     dyn <- rbindlist(
         cm_backend_sample_fit_test(cm_translate_parameters(ft$par), ft$post, 250, seed = 0)
-    )[, .(true_deaths = sum(death_o), true_cases = sum(cases), 
+    )[, .(true_deaths = sum(death_o), true_cases = sum(cases), totR = sum(R),
           rep_deaths = obs0[2], rep_cases = obs0[3]), by = .(run, t) ]
     
-    melt(dyn[order(t),
-        .(t,
-            ct_deaths = cumsum(true_deaths), ct_cases = cumsum(true_cases),
-            tr_deaths = cumsum(rep_deaths), tr_cases = cumsum(rep_cases)
-        ),
-        keyby = run
-    ], id.vars = c("run","t"), variable.name = "outcome")[, scenario := nm ]
+    melt(dyn[order(run, t)], id.vars = c("run","t"), variable.name = "outcome")[, scenario := nm ]
 }, ft = comb.fits, nm = names(comb.fits), SIMPLIFY = FALSE))
 
-qtile <- function(
-    v, ps = c(lo95=0.025, lo50=0.25, md=0.5, hi50=0.75, hi95=0.975),
-    withMean = c("mn", NA),
-    fmt = "%s",
-    na.rm = TRUE
-) {
-    qs <- quantile(v, probs = ps, na.rm = na.rm)
-    names(qs) <- sprintf(fmt, names(ps))
-    if (!is.na(withMean[1])) {
-        mn <- mean(v)
-        names(mn) <- sprintf(fmt, withMean[1])
-        qs <- c(qs, mn)
-    }
-    as.list(qs)
-}
+#' TODO could get fancy with tstrsplit?
+all.dyn[outcome %like% "^true",   epi := "true"];
+all.dyn[outcome %like% "^rep",    epi := "reported"];
+all.dyn[outcome %like% "cases$",  ind := "cases"];
+all.dyn[outcome %like% "deaths$", ind := "deaths"];
 
-qs.dt <- melt(
-    all.dyn[, qtile(value), by=.(scenario, outcome, t)],
-    id.vars = c("scenario","outcome","t"),
-    variable.name = "quantile"
+all.dyn[, date := ymd("2020-01-01") + t ];
+
+obs.dt = melt(fread(.args[2]), id.vars = 1:2, variable.name = "ind");
+#' assert: no missing dates
+obs.dt[order(date), rolling := frollmean(value, 7), by = ind ]
+
+pcases <- ggplot(all.dyn[
+    scenario == "1.0" & epi == "reported" & ind == "cases" & date > "2020-04-15"
+]) +
+    aes(date, value, group = run) +
+    geom_line(aes(color="model"), alpha = 0.02) +
+    geom_point(aes(color="reported", group = NULL), obs.dt[ind == "cases"], alpha = 0.2) +
+    geom_line(aes(y=rolling, color="reported", group = NULL), obs.dt[ind == "cases"]) +
+    scale_x_date(
+        name = NULL, date_breaks = "months", date_labels = "%b"
+    ) + scale_y_log10(name = "New Cases") +
+    scale_color_manual(name = NULL, values = c(model="dodgerblue", reported="black")) +
+    theme_minimal() + theme(
+        panel.grid.minor = element_blank(),
+        strip.placement = "outside"
+    )
+
+pdeaths <- ggplot(all.dyn[
+    scenario == "1.0" & epi == "reported" & ind == "deaths" & date > "2020-04-15"
+]) +
+    aes(date, value, group = run) +
+    geom_line(aes(color="model"), alpha = 0.02) +
+    geom_point(aes(color="reported", group = NULL), obs.dt[ind == "deaths"], alpha = 0.2) +
+    geom_line(aes(y=rolling, color="reported", group = NULL), obs.dt[ind == "deaths"]) +
+    scale_x_date(
+        name = NULL, date_breaks = "months", date_labels = "%b"
+    ) + scale_y_log10(name = "New Deaths") +
+    scale_color_manual(name = NULL, values = c(model="dodgerblue", reported="black")) +
+    theme_minimal() + theme(
+        panel.grid.minor = element_blank(),
+        strip.placement = "outside"
+    )
+
+pop <- sum(comb.fits[[1]]$par$pop[[1]]$size)
+sero <- fread("sindh_sero.csv")
+sero[, value := positive/total ]
+
+bino <- function(ci, pos, tot) as.data.table(t(mapply(
+    function(x, n, p=x/n) binom.test(x, n, p, conf.level = ci)$conf.int,
+    x = pos, n = tot
+)))
+
+sero[, c("lo95","hi95") := bino(.95, positive, total) ]
+sero[, mid := start + (end - start)/2 ]
+
+psero <- ggplot(
+    all.dyn[outcome == "totR" & scenario == "1.0" & date > "2020-04-15"]
+) + aes(date, value/pop, group = run) +
+    geom_line(aes(color="model"), alpha = 0.02) +
+    geom_linerange(
+        aes(
+            y = value, x = NULL,
+            xmin = start, xmax = end,
+            color = "reported", group = NULL,
+            alpha = assessment
+        ), data = sero
+    ) +
+    geom_linerange(
+        aes(
+            x = mid, y = NULL,
+            ymin = lo95, ymax = hi95,
+            color = "reported", group = NULL,
+            alpha = assessment
+        ), data = sero
+    ) + scale_color_manual(guide = "none", values = c(model="dodgerblue", reported="black")) +
+    scale_alpha_manual(NULL, values = c(good = 0.9, bad = 0.2), guide = "none") +
+    scale_y_continuous("Attack Fraction\n& Serology") +
+    scale_x_date(
+        name = NULL, date_breaks = "months", date_labels = "%b"
+    ) + 
+    coord_cartesian(ylim = c(0, 0.6)) +
+    theme_minimal() + theme(
+        panel.grid.minor = element_blank()
+    )
+
+res <- (pcases / pdeaths / psero) + plot_layout(guides = "collect") & theme(
+    legend.position = "top",
+    panel.border=element_rect(colour = "black", fill=NA, size=0.5)
 )
 
-qs.dt[order(t), dvalue := c(value[1], diff(value)), by=.(scenario, outcome, quantile)]
-scnlvls <- names(comb.fits)
-qs.dt[, scenario := factor(scenario, levels = c(scnlvls[-1],scnlvls[1]), ordered = TRUE)]
-
-#' TODO could get fancy with tstrsplit?
-qs.dt[outcome %like% "^ct",   epi := "true"];
-qs.dt[outcome %like% "^tr",    epi := "reported"];
-qs.dt[outcome %like% "cases$",  ind := "cases"];
-qs.dt[outcome %like% "deaths$", ind := "deaths"];
-
-qs.dt[, date := ymd("2020-01-01") + t ];
+ggsave("fitting.png", res, height = 6, width = 5, dpi = 600)
 
 # dyn = rbind(
 #     load_fit("fit_sindh.qs", "No waning"),
@@ -80,9 +135,9 @@ qs.dt[, date := ymd("2020-01-01") + t ];
 
 qs.wd <- dcast(qs.dt, scenario + epi + ind + date ~ quantile, value.var = "dvalue")
 
-obs.dt = melt(fread(.args[2]), id.vars = 1:2, variable.name = "ind");
-#' assert: no missing dates
-obs.dt[order(date), rolling := frollmean(value, 7), by = ind ]
+
+
+
 
 plotter <- function(
     dt, filt = expression(1:.N), obs = obs.dt,
