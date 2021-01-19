@@ -1,81 +1,70 @@
 suppressPackageStartupMessages({
     require(data.table)
-    require(qs)
     require(ggplot2)
-    require(lubridate)
     require(patchwork)
 })
 
 .debug <- "~/Dropbox/Covid-WHO-vax/outputs"
 .args <- if (interactive()) sprintf(c(
-    "fit_combined.qs", "sindh_data.csv",
-    "../covidm-vaxco", "%s/figures/model_fit.png"
+    "%s/sim_model.rds", "sindh_data.csv",
+    "%s/figures/model_fit.png"
 ), .debug)
 
-# set up covidm
-cm_path = tail(.args, 2)[1];
-cm_force_rebuild = F;
-cm_build_verbose = T;
-cm_force_shared = T;
-cm_version = 2;
-source(file.path(cm_path, "R", "covidm.R"))
-
-comb.fits <- qread(.args[1])
-
-all.dyn <- rbindlist(mapply(function(ft, nm) {
-    ft$par$deterministic <- FALSE
-    
-    dyn <- rbindlist(
-        cm_backend_sample_fit_test(cm_translate_parameters(ft$par), ft$post, 250, seed = 0)
-    )[, .(true_deaths = sum(death_o), true_cases = sum(cases), totR = sum(R),
-          rep_deaths = obs0[2], rep_cases = obs0[3]), by = .(run, t) ]
-    
-    melt(dyn[order(run, t)], id.vars = c("run","t"), variable.name = "outcome")[, scenario := nm ]
-}, ft = comb.fits, nm = names(comb.fits), SIMPLIFY = FALSE))
-
-#' TODO could get fancy with tstrsplit?
-all.dyn[outcome %like% "^true",   epi := "true"];
-all.dyn[outcome %like% "^rep",    epi := "reported"];
-all.dyn[outcome %like% "cases$",  ind := "cases"];
-all.dyn[outcome %like% "deaths$", ind := "deaths"];
-
-all.dyn[, date := ymd("2020-01-01") + t ];
+all.dyn <- readRDS(.args[1])
 
 obs.dt = melt(fread(.args[2]), id.vars = 1:2, variable.name = "ind");
 #' assert: no missing dates
 obs.dt[order(date), rolling := frollmean(value, 7), by = ind ]
 
-pcases <- ggplot(all.dyn[
-    scenario == "1.0" & epi == "reported" & ind == "cases" & date > "2020-04-15"
-]) +
+inc.p <- function(
+    dt, ylab, tarind = dt[,unique(ind)], mdlcol = "dodgerblue"
+) ggplot(dt) +
     aes(date, value, group = run) +
     geom_line(aes(color="model"), alpha = 0.02) +
-    geom_point(aes(color="reported", group = NULL), obs.dt[ind == "cases"], alpha = 0.2) +
-    geom_line(aes(y=rolling, color="reported", group = NULL), obs.dt[ind == "cases"]) +
+    geom_point(aes(color="reported", group = NULL), obs.dt[ind == tarind], alpha = 0.2) +
+    geom_line(aes(y=rolling, color="reported", group = NULL), obs.dt[ind == tarind]) +
     scale_x_date(
         name = NULL, date_breaks = "months", date_labels = "%b"
-    ) + scale_y_log10(name = "New Cases") +
-    scale_color_manual(name = NULL, values = c(model="dodgerblue", reported="black")) +
+    ) + scale_y_log10(name = ylab) +
+    scale_color_manual(name = NULL, values = c(model = mdlcol, reported="black")) +
+    coord_cartesian(expand = FALSE, clip = "off") +
     theme_minimal() + theme(
-        panel.grid.minor = element_blank(),
-        strip.placement = "outside"
+        panel.grid.minor = element_blank()
     )
 
-pdeaths <- ggplot(all.dyn[
-    scenario == "1.0" & epi == "reported" & ind == "deaths" & date > "2020-04-15"
-]) +
-    aes(date, value, group = run) +
-    geom_line(aes(color="model"), alpha = 0.02) +
-    geom_point(aes(color="reported", group = NULL), obs.dt[ind == "deaths"], alpha = 0.2) +
-    geom_line(aes(y=rolling, color="reported", group = NULL), obs.dt[ind == "deaths"]) +
+pcases <- inc.p(all.dyn[
+    scenario == "Inf" & epi == "reported" & ind == "cases" & between(date, "2020-04-15", "2020-09-15")
+], "New Cases")
+
+pdeaths <- inc.p(all.dyn[
+    scenario == "1.0" & epi == "reported" & ind == "deaths" & between(date, "2020-04-15", "2020-09-15")
+], "New Deaths")
+
+pext <- function(dt, ylab, tarind = dt[,unique(ind)]) ggplot(dt) +
+    aes(date, value, group = interaction(run, scenario), color = scenario) +
+    geom_line(alpha = 0.02) +
+    geom_point(aes(color="reported", group = NULL), obs.dt[ind == tarind], alpha = 0.2) +
+    geom_line(aes(y=rolling, color="reported", group = NULL), obs.dt[ind == tarind]) +
     scale_x_date(
         name = NULL, date_breaks = "months", date_labels = "%b"
-    ) + scale_y_log10(name = "New Deaths") +
-    scale_color_manual(name = NULL, values = c(model="dodgerblue", reported="black")) +
+    ) + scale_y_log10(name = ylab) +
+    scale_color_manual(
+        name = NULL,
+        breaks = c("reported","Inf","5.0","2.5","1.0"),
+        values = c("black", scales::hue_pal()(4))
+    ) +
+    coord_cartesian(expand = FALSE, ylim = c(1,NA)) +
     theme_minimal() + theme(
-        panel.grid.minor = element_blank(),
-        strip.placement = "outside"
+        panel.grid.minor = element_blank()
     )
+
+pext.cases <- pext(all.dyn[
+  epi == "reported" & ind == "cases" & date > "2020-04-15"
+], "New Cases")
+
+pext.deaths <- pext(all.dyn[
+    epi == "reported" & ind == "deaths" & date > "2020-04-15"
+], "New Deaths")
 
 pop <- sum(comb.fits[[1]]$par$pop[[1]]$size)
 sero <- fread("sindh_sero.csv")

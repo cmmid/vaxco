@@ -50,6 +50,11 @@ ${DATAPTH}/fit_combined.qs: merge_fits.R ${FITS}
 ${DATAPTH}/fitd_combined.qs: merge_fits.R ${DFITS}
 	${R}
 
+${ODIR}/sim_model.rds: sim_model_fit.R ${DATAPTH}/fitd_combined.qs sindh_data.csv | ${CMPTH}
+	Rscript $^ $| $@
+
+smodel: ${ODIR}/sim_model.rds
+
 ${ODIR}/%_ext.rds: compute.R ${DATASRC} ${CONFEXT} | ${CMPTH}
 	Rscript $^ $* $| $@
 
