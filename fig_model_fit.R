@@ -2,11 +2,14 @@ suppressPackageStartupMessages({
     require(data.table)
     require(ggplot2)
     require(patchwork)
+    require(qs)
 })
 
 .debug <- "~/Dropbox/Covid-WHO-vax/outputs"
 .args <- if (interactive()) sprintf(c(
-    "%s/sim_model.rds", "sindh_data.csv",
+    "%s/sim_model.rds",
+    "sindh_data.csv",
+    "fitd_combined.qs",
     "%s/figures/model_fit.png"
 ), .debug)
 
@@ -15,6 +18,11 @@ all.dyn <- readRDS(.args[1])
 obs.dt = melt(fread(.args[2]), id.vars = 1:2, variable.name = "ind");
 #' assert: no missing dates
 obs.dt[order(date), rolling := frollmean(value, 7), by = ind ]
+
+comb.fits <- qread(.args[3])
+
+mdlcols <- c("black", scales::hue_pal()(4))
+scns <- c("reported", "Inf","5.0","2.5","1.0")
 
 inc.p <- function(
     dt, ylab, tarind = dt[,unique(ind)], mdlcol = "dodgerblue"
@@ -27,18 +35,15 @@ inc.p <- function(
         name = NULL, date_breaks = "months", date_labels = "%b"
     ) + scale_y_log10(name = ylab) +
     scale_color_manual(name = NULL, values = c(model = mdlcol, reported="black")) +
-    coord_cartesian(expand = FALSE, clip = "off") +
-    theme_minimal() + theme(
-        panel.grid.minor = element_blank()
-    )
+    coord_cartesian(expand = FALSE, clip = "off")
 
 pcases <- inc.p(all.dyn[
-    scenario == "Inf" & epi == "reported" & ind == "cases" & between(date, "2020-04-15", "2020-09-15")
-], "New Cases")
+    scenario == scns[5] & epi == "reported" & ind == "cases" & between(date, "2020-04-15", "2020-09-15")
+], "New Cases", mdlcol = mdlcols[5])
 
 pdeaths <- inc.p(all.dyn[
-    scenario == "1.0" & epi == "reported" & ind == "deaths" & between(date, "2020-04-15", "2020-09-15")
-], "New Deaths")
+    scenario == scns[5] & epi == "reported" & ind == "deaths" & between(date, "2020-04-15", "2020-09-15")
+], "New Deaths", mdlcol = mdlcols[5])
 
 pext <- function(dt, ylab, tarind = dt[,unique(ind)]) ggplot(dt) +
     aes(date, value, group = interaction(run, scenario), color = scenario) +
@@ -50,13 +55,10 @@ pext <- function(dt, ylab, tarind = dt[,unique(ind)]) ggplot(dt) +
     ) + scale_y_log10(name = ylab) +
     scale_color_manual(
         name = NULL,
-        breaks = c("reported","Inf","5.0","2.5","1.0"),
-        values = c("black", scales::hue_pal()(4))
+        breaks = scns,
+        values = mdlcols
     ) +
-    coord_cartesian(expand = FALSE, ylim = c(1,NA)) +
-    theme_minimal() + theme(
-        panel.grid.minor = element_blank()
-    )
+    coord_cartesian(expand = FALSE, ylim = c(1,NA))
 
 pext.cases <- pext(all.dyn[
   epi == "reported" & ind == "cases" & date > "2020-04-15"
@@ -78,9 +80,8 @@ bino <- function(ci, pos, tot) as.data.table(t(mapply(
 sero[, c("lo95","hi95") := bino(.95, positive, total) ]
 sero[, mid := start + (end - start)/2 ]
 
-psero <- ggplot(
-    all.dyn[outcome == "totR" & scenario == "1.0" & date > "2020-04-15"]
-) + aes(date, value/pop, group = run) +
+sero.p <- function(dt, mdlcol = "dodgerblue") ggplot(dt) +
+    aes(date, value/pop, group = run) +
     geom_line(aes(color="model"), alpha = 0.02) +
     geom_linerange(
         aes(
@@ -97,125 +98,72 @@ psero <- ggplot(
             color = "reported", group = NULL,
             alpha = assessment
         ), data = sero
-    ) + scale_color_manual(guide = "none", values = c(model="dodgerblue", reported="black")) +
+    ) + scale_color_manual(guide = "none", values = c(model=mdlcol, reported="black")) +
     scale_alpha_manual(NULL, values = c(good = 0.9, bad = 0.2), guide = "none") +
-    scale_y_continuous("Attack Fraction\n& Serology") +
+    scale_y_continuous("Seropositivity", breaks = c(0:3)/4) +
     scale_x_date(
         name = NULL, date_breaks = "months", date_labels = "%b"
     ) + 
-    coord_cartesian(ylim = c(0, 0.6)) +
-    theme_minimal() + theme(
+    coord_cartesian(ylim = c(0, 0.75), expand = FALSE, clip = "off")
+
+sero.ext <- function(dt) ggplot(dt) +
+    aes(date, value/pop, group = interaction(run,scenario), color = scenario) +
+    geom_line(alpha = 0.02) +
+    geom_linerange(
+        aes(
+            y = value, x = NULL,
+            xmin = start, xmax = end,
+            color = "reported", group = NULL,
+            alpha = assessment
+        ), data = sero
+    ) +
+    geom_linerange(
+        aes(
+            x = mid, y = NULL,
+            ymin = lo95, ymax = hi95,
+            color = "reported", group = NULL,
+            alpha = assessment
+        ), data = sero
+    ) +
+    scale_alpha_manual(NULL, values = c(good = 0.9, bad = 0.2), guide = "none") +
+    scale_y_continuous("Seropositivity", breaks = c(0:3)/4) +
+    scale_x_date(
+        name = NULL, date_breaks = "months", date_labels = "%b"
+    ) +
+    scale_color_manual(
+        name = NULL,
+        breaks = scns,
+        values = mdlcols
+    ) +
+    coord_cartesian(ylim = c(0, 0.75), expand = FALSE)
+
+psero <- sero.p(all.dyn[
+    scenario == scns[5] & outcome == "totR" & between(date, "2020-04-15", "2020-09-15")
+], mdlcols[5])
+
+pext.sero <- sero.ext(all.dyn[
+    outcome == "totR" & date > "2020-04-15"
+])
+
+res <- ((guide_area() / pcases / pdeaths / psero) +
+    plot_layout(guides = "collect", heights = c(.1, 1, 1, 1)) +
+    plot_annotation(tag_levels = "A")) &
+    theme_minimal() & theme(
+        legend.direction = "horizontal",
+        panel.border=element_rect(colour = "black", fill=NA, size=0.25),
         panel.grid.minor = element_blank()
     )
 
-res <- (pcases / pdeaths / psero) + plot_layout(guides = "collect") & theme(
-    legend.position = "top",
-    panel.border=element_rect(colour = "black", fill=NA, size=0.5)
-)
+res.ext <- ((guide_area() / pext.cases / pext.deaths / pext.sero) +
+    plot_layout(guides = "collect", heights = c(.1, 1, 1, 1)) +
+    plot_annotation(tag_levels = "A")) &
+    theme_minimal() &
+    theme(
+        legend.direction = "horizontal",
+        panel.border=element_rect(colour = "black", fill=NA, size=0.25),
+        panel.grid.minor = element_blank()
+    )
 
-ggsave("fitting.png", res, height = 6, width = 5, dpi = 600)
+ggsave(tail(.args, 1), res, height = 6, width = 5, dpi = 600)
 
-# dyn = rbind(
-#     load_fit("fit_sindh.qs", "No waning"),
-#     load_fit("fit_sindh_waning_1.0.qs", "1 year protection"),
-#     load_fit("fit_sindh_waning_2.5.qs", "2.5 year protection"),
-#     load_fit("fit_sindh_waning_5.0.qs", "5 year protection")
-# );
-
-qs.wd <- dcast(qs.dt, scenario + epi + ind + date ~ quantile, value.var = "dvalue")
-
-
-
-
-
-plotter <- function(
-    dt, filt = expression(1:.N), obs = obs.dt,
-    locol = "dodgerblue", hicol = "firebrick",
-    ylim = c(100, 10000)
-) ggplot(dt[eval(filt)]) +
-    aes(date, alpha = scenario) +
-    geom_point(
-        aes(y = value, color = "obs"),
-        data = obs.dt[eval(filt)], alpha = 0.1,
-        show.legend = FALSE
-    ) +
-    geom_line(aes(y = hi95, color = "hi", linetype = "95"), size = 0.25) +
-    geom_line(aes(y = hi50, color = "hi", linetype = "50"), size = 0.25) +
-    geom_line(aes(y = lo95, color = "lo", linetype = "95"), size = 0.25) +
-    geom_line(aes(y = lo50, color = "lo", linetype = "50"), size = 0.25) +
-    geom_line(aes(y = md, color = "md", linetype = "0")) +
-    geom_line(aes(y = rolling, alpha = "observed", color = "obs", linetype = "obs"), data = obs.dt[eval(filt)]) +
-    facet_grid(ind ~ ., scales = "free_y", switch = "y") +
-    scale_y_log10() +
-    scale_linetype_manual(
-        name = "Simulation\nQuantile",
-        breaks = c("0","50","95"),
-        labels = c("0"="median","50"="50% IQR","95"="95% IQR"),
-        values = c(obs="solid", `0`="solid", `50`="dashed", `95`="dotted"),
-        guide = guide_legend(
-            override.aes = list(size = c(1, 0.25, 0.25))
-        )
-    ) +
-    scale_color_manual(
-        "Measures",
-        labels = c(lo="Lower Qs", hi = "Upper Qs", md = "Median", obs = "Reported\n(7 day mean)"),
-        values = c(lo=locol, hi = hicol, md = "grey45", obs = "black")
-    ) +
-    scale_alpha_manual(
-        "Assumed Natural Waning",
-        values = c(observed = 1, `1.0` = 1, `2.5`=0.7, `5.0`=0.5, `Inf`=0.3),
-        guide = "none"
-    ) +
-    scale_x_date(
-        name = NULL,
-        date_breaks = "months", date_label = "%b",
-    ) + theme_minimal() + theme(
-        strip.placement = "outside", axis.title.y = element_blank()
-    ) +
-    coord_cartesian(ylim = ylim, xlim = c(ymd("2020-05-01"), NA))
-
-fit.p <- (plotter(
-    qs.wd[epi == "reported" & scenario == "1.0"], filt = expression(ind == "cases")
-) / plotter(
-    qs.wd[epi == "reported" & scenario == "1.0"], filt = expression(ind == "deaths"), ylim = c(1,100)
-)) + plot_layout(nrow = 2, guides = "collect") & theme(legend.position = "bottom")
-
-ggsave(tail(.args, 1), fit.p, width = 9, height = 6, dpi = 300)
-
-# ccol = "lightslateblue";
-# dcol = "coral";
-# 
-# th = theme_cowplot(font_size = 10) + theme(strip.background = element_blank(), strip.placement = "outside", plot.title = element_text(size = 10))
-# 
-# plot_cases = ggplot(dyn[ind == "cases" & epi == "reported"]) +
-#     geom_ribbon(aes(date, ymin = `2.5%`, ymax = `97.5%`, group = variable), fill = ccol) +
-#     geom_line(aes(date, y = `50%`, group = variable), size = 0.25) +
-#     geom_point(aes(date, value), data = data[ind == "cases"], size = 0.1) +
-#     facet_wrap(~scenario, ncol = 1, scales = "free_x", strip.position = "left") +
-#     scale_x_date(date_breaks = "1 month", date_label = "%b", limits = c(ymd("2020-03-01"), NA)) +
-#     labs(x = NULL, y = NULL, title = "Cases") +
-#     th
-# 
-# plot_deaths = ggplot(dyn[ind == "deaths" & epi == "reported"]) +
-#     geom_ribbon(aes(date, ymin = `2.5%`, ymax = `97.5%`, group = variable), fill = dcol) +
-#     geom_line(aes(date, y = `50%`, group = variable), size = 0.25) +
-#     geom_point(aes(date, value), data = data[ind == "deaths"], size = 0.1) +
-#     facet_wrap(~scenario, ncol = 1, scales = "free_x") +
-#     scale_x_date(date_breaks = "1 month", date_label = "%b", limits = c(ymd("2020-03-01"), NA)) +
-#     labs(x = NULL, y = NULL, title = "Deaths") +
-#     th + theme(strip.text = element_blank())
-
-# dyn[, epi := factor(epi, c("true", "reported"))]
-# 
-# plot_compare = ggplot() +
-#     geom_line(data = dyn, aes(date, y = `2.5%`,  group = variable, colour = ind, linetype = epi), size = 0.25) +
-#     geom_line(data = dyn, aes(date, y = `97.5%`, group = variable, colour = ind, linetype = epi), size = 0.25) +
-#     facet_wrap(~scenario, ncol = 1, scales = "free_x") +
-#     scale_x_date(date_breaks = "1 month", date_label = "%b", limits = c(ymd("2020-03-01"), NA)) +
-#     scale_y_log10(limits = c(1, NA), breaks = c(1, 100, 10000), labels = c(1, 100, 10000)) +
-#     scale_linetype_manual(values = c("true" = "solid", "reported" = "dotted")) +
-#     scale_colour_manual(values = c("cases" = ccol, "deaths" = dcol), guide = FALSE) +
-#     labs(x = NULL, y = NULL, title = "Reporting", colour = NULL, linetype = NULL) +
-#     th + theme(legend.position = c(0.65, 1.0), legend.key.height = unit(0.2, "pt"), strip.text = element_blank())
-
-# cowplot::plot_grid(plot_cases, plot_deaths, plot_compare, nrow = 1, rel_widths = c(1, 1, 1))
+ggsave(gsub("\\.","_ext.",tail(.args, 1)), res.ext, height = 6, width = 6, dpi = 600)
