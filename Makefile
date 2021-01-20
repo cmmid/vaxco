@@ -61,6 +61,18 @@ ${ODIR}/%_ext.rds: compute.R ${DATASRC} ${CONFEXT} | ${CMPTH}
 ${ODIR}/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH}
 	Rscript $^ $* $| $@
 
+# compute all the baseline scenarios - full series, unquantiled
+${ODIR}/econ/baseline.rds: econ.R ${DATASRC} ${CONFDB} | ${CMPTH}
+	Rscript $^ $@
+
+# compute the econ scenarios for each epi scenario - these are quantiles
+${ODIR}/econ/%.rds: econ.R ${DATASRC} ${CONFDB} | ${CMPTH}
+	Rscript $^ $* $| $@
+
+# merge the econ scenarios
+${ODIR}/econ/merge.rds: econ_merge.R ${DATASRC} ${CONFDB} | ${CMPTH}
+	Rscript $^ $* $| $@
+
 intconfig: $(patsubst %,${ODIR}/%.rds,$(shell seq 1 3072))
 baseconfig: $(patsubst %,${ODIR}/%.rds,$(shell seq 3073 3080))
 extendconfig: $(patsubst %,${ODIR}/%_ext.rds,$(shell seq 3081 4616))

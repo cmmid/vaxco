@@ -356,8 +356,16 @@ scen.list <- rbindlist(list(scen.list, to.add))
 
 n <- names(scen.list)[-1] # name of fields to join on
 scen.dt <-as.data.table(scen.list)
-scen.dt <- econ.dt[as.data.table(scen.list),on=n][anni_year==t_horizon]
+scen.dt <- econ.dt[anni_year==t_horizon][as.data.table(scen.list),on=n]
 scen.dt[,scen_id:=.I]
+
+ggplot(epi.dt[id == 3283]) + aes(anni_year) +
+    facet_grid(age ~ ., scales = "free_y") +
+    geom_line(aes(y=cases_lo95, linetype="lo")) +
+    geom_line(aes(y=cases_hi95, linetype="hi")) +
+    geom_line(aes(y=cases_md, linetype="md")) +
+    scale_y_log10() +
+    theme_minimal()
 
 # summary of 10 year costs and dalys averted
 scen.tab <- scen.dt[,.("Scenario No."=scen_id,"Description"=scen_name,
