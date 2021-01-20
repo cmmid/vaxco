@@ -7,7 +7,7 @@ suppressPackageStartupMessages({
 
 .debug <- "1537"
 .args <- if (interactive()) sprintf(c(
-    "fit_combined.qs", "epi_data.csv", "mob_data.csv",
+    "fitd_combined.qs", "epi_data.csv", "mob_data.csv",
     "inputs/config.sqlite", "%s", "../covidm-vaxco", "outputs/%s.rds"
 ), .debug) else commandArgs(trailingOnly = TRUE)
 
