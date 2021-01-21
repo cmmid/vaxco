@@ -66,7 +66,7 @@ ${ODIR}/econ/%.rds: econ.R ${ECONDATA} ${CONFDB} ${ODIR}/sim/%.rds | ${ODIR}/eco
 
 # compute all the baseline scenarios - full series, unquantiled
 ${ODIR}/econ/baseline.rds: econ.R ${ECONDATA} ${CONFDB} | ${ODIR}/econ
-	Rscript $^ ${ODIR} $@
+	Rscript $^ ${ODIR}/sim $@
 
 ebaseline: ${ODIR}/econ/baseline.rds
 eone: $(patsubst %,${ODIR}/econ/%.rds,0001)

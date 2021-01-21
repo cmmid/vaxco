@@ -4,13 +4,13 @@ suppressPackageStartupMessages({
 })
 
 .debug <- c("~/Dropbox/Covid-WHO-vax/outputs", "baseline")
-.debug <- c("~/Dropbox/Covid-WHO-vax/outputs", "0001")
+#.debug <- c("~/Dropbox/Covid-WHO-vax/outputs", "0001")
 .args <- if (interactive()) sprintf(c(
     "covid_other_costs.csv",
     "covid_vac_costs_per_dose.csv",
     "daly_scenarios.csv",
     "%s/config.sqlite",
-    ifelse(.debug[2]=="baseline","%s","%s/%s.rds"), # for the baseline, will combine several
+    ifelse(.debug[2]=="baseline","%s/sim","%s/sim/%s.rds"), # for the baseline, will combine several
     "%s/econ/%s.rds"
 ),.debug[1], .debug[2]) else commandArgs(trailingOnly = TRUE)
 
