@@ -6,7 +6,7 @@ IDIR = ${DRPBXPTH}/inputs
 ODIR = ${DRPBXPTH}/outputs
 FDIR = ${DRPBXPTH}/figures
 
-${IDIR} ${ODIR} ${FDIR}:
+${IDIR} ${ODIR} ${FDIR} ${ODIR}/econ ${ODIR}/sim:
 	mkdir -p $@
 
 R = Rscript $^ $@
@@ -55,32 +55,29 @@ ${ODIR}/sim_model.rds: sim_model_fit.R ${DATAPTH}/fitd_combined.qs sindh_data.cs
 
 smodel: ${ODIR}/sim_model.rds
 
-${ODIR}/%_ext.rds: compute.R ${DATASRC} ${CONFEXT} | ${CMPTH}
-	Rscript $^ $* $| $@
+${ODIR}/sim/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH} ${ODIR}/sim
+	Rscript $^ $* $(word 1,$|) $@
 
-${ODIR}/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH}
-	Rscript $^ $* $| $@
-
-# compute all the baseline scenarios - full series, unquantiled
-${ODIR}/econ/baseline.rds: econ.R ${DATASRC} ${CONFDB} | ${CMPTH}
-	Rscript $^ $@
+ECONDATA := covid_other_costs.csv covid_vac_costs_per_dose.csv daly_scenarios.csv
 
 # compute the econ scenarios for each epi scenario - these are quantiles
-${ODIR}/econ/%.rds: econ.R ${DATASRC} ${CONFDB} | ${CMPTH}
-	Rscript $^ $* $| $@
+${ODIR}/econ/%.rds: econ.R ${ECONDATA} ${CONFDB} ${ODIR}/sim/%.rds | ${ODIR}/econ/baseline.rds
+	Rscript $^ $@
 
-# merge the econ scenarios
-${ODIR}/econ/merge.rds: econ_merge.R ${DATASRC} ${CONFDB} | ${CMPTH}
-	Rscript $^ $* $| $@
+# compute all the baseline scenarios - full series, unquantiled
+${ODIR}/econ/baseline.rds: econ.R ${ECONDATA} ${CONFDB} | ${ODIR}/econ
+	Rscript $^ ${ODIR} $@
 
-intconfig: $(patsubst %,${ODIR}/%.rds,$(shell seq 1 3072))
-baseconfig: $(patsubst %,${ODIR}/%.rds,$(shell seq 3073 3080))
-extendconfig: $(patsubst %,${ODIR}/%_ext.rds,$(shell seq 3081 4616))
+ebaseline: ${ODIR}/econ/baseline.rds
+eone: $(patsubst %,${ODIR}/econ/%.rds,0001)
+eall: $(patsubst %,${ODIR}/econ/%.rds,$(shell seq -f%04g 1 4616))
+
+# merge the econ quantiled scenarios
+${ODIR}/econ/merge.rds: econ_merge.R | eall
+	Rscript $^ ${ODIR}/econ $@
 
 ${ODIR}/epi_quantile.rds: epi_quantile.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/*.rds)) | ${ODIR} ${CONFDB}
 	Rscript $< $| $@
-
-ECONDATA := covid_other_costs.csv covid_vac_costs_per_dose.csv daly_scenarios.csv
 
 ${ODIR}/econ_quantile.rds: econ_quantile.R ${ODIR}/epi_quantile.rds ${ECONDATA} ${CONFDB}
 	${R}
