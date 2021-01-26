@@ -10,12 +10,12 @@ t_horizon <- 10
 
 # paths
 path.in  <- "~/Dropbox/Covid-WHO-vax/inputs/"
-path.out <- "~/Dropbox/Covid-WHO-vax/outputs/"
+path.out <- "~/Dropbox/Covid-WHO-vax/outputs"
 path.fig <- "~/Dropbox/Covid-WHO-vax/figures/"
 
 # load epi scenario info
 drv <- RSQLite::SQLite()
-conn <- dbConnect(drv, dbname=paste0(path.out,"config.sqlite"))
+conn <- dbConnect(drv, dbname=file.path(path.out,"config.sqlite"))
 epi_scen.dt  <- data.table(dbReadTable(conn,"scenario"))
 
 dbDisconnect(conn)
@@ -38,8 +38,8 @@ econ_scen.dt <- data.table(expand.grid(
 
 # load results
 
-epi.dt <- data.table(readRDS(paste0(path.out,"epi_quantile.rds")))
-econ.dt <- data.table(readRDS(paste0(path.out,"econ_quantile.rds")))
+epi.dt <- data.table(readRDS(file.path(path.out,"epi_quantile.rds")))
+econ.dt <- data.table(readRDS(file.path(path.out,"econ","merge.rds")))
 
 epi.dt <- epi.dt[qtile %in% c("lo95","md","hi95")]
 econ.dt <- econ.dt[qtile %in% c("lo95","md","hi95") & # drop unused qtiles
@@ -353,19 +353,20 @@ to.add$scen_name = "Societal perspective"
 to.add$perspective = "societal"
 scen.list <- rbindlist(list(scen.list, to.add))
 
+t_horizon <- 5
 
 n <- names(scen.list)[-1] # name of fields to join on
 scen.dt <-as.data.table(scen.list)
 scen.dt <- econ.dt[anni_year==t_horizon][as.data.table(scen.list),on=n]
 scen.dt[,scen_id:=.I]
 
-ggplot(epi.dt[id == 3283]) + aes(anni_year) +
-    facet_grid(age ~ ., scales = "free_y") +
-    geom_line(aes(y=cases_lo95, linetype="lo")) +
-    geom_line(aes(y=cases_hi95, linetype="hi")) +
-    geom_line(aes(y=cases_md, linetype="md")) +
-    scale_y_log10() +
-    theme_minimal()
+# ggplot(epi.dt[id == 3283]) + aes(anni_year) +
+#     facet_grid(age ~ ., scales = "free_y") +
+#     geom_line(aes(y=cases_lo95, linetype="lo")) +
+#     geom_line(aes(y=cases_hi95, linetype="hi")) +
+#     geom_line(aes(y=cases_md, linetype="md")) +
+#     scale_y_log10() +
+#     theme_minimal()
 
 # summary of 10 year costs and dalys averted
 scen.tab <- scen.dt[,.("Scenario No."=scen_id,"Description"=scen_name,

@@ -5,7 +5,7 @@ suppressPackageStartupMessages({
 })
 
 .args <- if (interactive()) c(
-    "fitd_sindh.qs", "../covidm"
+    "fitd_sindh.qs", "../covidm-vaxco"
 ) else commandArgs(trailingOnly = TRUE)
 
 # load fitted model for Sindh
