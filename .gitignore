@@ -7,3 +7,5 @@ outputs/*
 figures/*
 .Rhistory
 fit_combined.qs
+.DS_Store
+data_fitting/.DS_Store
