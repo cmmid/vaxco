@@ -2,7 +2,6 @@ library(data.table)
 library(ggplot2)
 library(cowplot)
 library(lubridate)
-library(here)
 library(cowplot)
 library(readxl)
 library(socialmixr)
@@ -11,36 +10,40 @@ library(zoo)
 library(stringr)
 library(socialmixr)
 
+.args <- if (interactive()) c(
+    "helper.R", "fitting_setup.R", "process_def.R",
+    "epi_data.rds", "mob_data.rds",
+    "birthrates.csv", "mortality.csv",
+    "../../covidm-vaxco",
+    "output.rds"
+)
 
-#
-# SETUP
-#
-
-# set up covidm
-cm_path = "~/Dropbox/nCoV/covidm/";
+#' set up covidm
+cm_path = tail(.args, 2)[1];
 cm_force_rebuild = F;
 cm_build_verbose = T;
+cm_force_shared = T;
 cm_version = 2;
-source(paste0(cm_path, "/R/covidm.R"))
+source(file.path(cm_path, "R","covidm.R"))
 
-source("helper.R")
-source("fitting_setup.R")
-source("process_def.R")
+lapply(.args[1:3], source)
 
 # load epi and mobility data
-epi = fread("./epi_data.csv")
-mob = fread("./mob_data.csv")
-birthrates = fread("./birthrates.csv")
-mortality = fread("./mortality.csv")
+epi = readRDS(.args[4])
+mob = readRDS(.args[5])
+birthrates = fread(.args[6])
+mortality = fread(.args[7])
 
+end.date <- min(epi[, max(date)],mob[, max(date)])
+endt <- as.integer(end.date - as.Date("2020-01-01"))
 #
 # RUNS
 #
 
-make_params = function(dem, mat, mob_loc, lmic_shift = 1, waning = FALSE, demographics = FALSE)
-{
-    date0 = "2020-01-01"
-    date1 = "2020-09-15"
+make_params = function(
+    dem, mat, mob_loc, lmic_shift = 1, waning = FALSE, demographics = FALSE,
+    date0 = "2020-01-01", date1 = end.date
+) {
     
     # Build parameters
     params = cm_parameters_SEI3R(dem, mat, deterministic = T, date_start = date0, date_end = date1,
@@ -214,23 +217,21 @@ do_fitting = function(dem, mat, epi_loc, mob_loc, waning, contact, demographics 
             ),
             cpp_loglikelihood = cpp_lik(par, epi, epi_loc, i_contact),
             cpp_observer = c(
-                'auto odds = [&](double x, double odds_ratio) {',
-                '    double a = x / (1 - x);',
-                '    return a * odds_ratio / (a * odds_ratio + 1);',
-                '};',
-
-                'auto asc = [&](double x, double y0, double y_lo, double s0, double s1) {',
-                '    double y1 = odds(y0, exp(y_lo));',
-                '    double xx = s0 + x * (s1 - s0);',
-                '    double h0 = exp(s0) / (1 + exp(s0));',
-                '    double h1 = exp(s1) / (1 + exp(s1));',
-                '    double h = (exp(xx) / (1 + exp(xx)) - h0) / (h1 - h0);',
-                '    return y0 + (y1 - y0) * h;',
-                '};',
-
-                'dyn.Obs(t, 0, 0, 0) = estimate_Rt(P, dyn, t, 0, 50);',
-                'dyn.Obs(t, 0, 1, 0) = dyn("death_o", t, {}, {}) * asc((t - P.time0) / (P.time1 - P.time0), x[3], x[4], -x[5], x[6]);',
-                'dyn.Obs(t, 0, 2, 0) = dyn("cases_reported", t, {}, {}) * asc((t - P.time0) / (P.time1 - P.time0), x[8], x[9], -x[10], x[11]);'
+                "auto odds = [&](double x, double odds_ratio) {"                                                                                 
+                ,"    double a = x / (1 - x);"                                                                                                    
+                ,"    return a * odds_ratio / (a * odds_ratio + 1);"                                                                              
+                ,"};"                                                                                                                             
+                ,"auto asc = [&](double x, double y0, double y_lo, double s0, double s1) {"                                                       
+                ,"    double y1 = odds(y0, exp(y_lo));"                                                                                           
+                ,"    double xx = s0 + x * (s1 - s0);"                                                                                            
+                ,"    double h0 = exp(s0) / (1 + exp(s0));"                                                                                       
+                ,"    double h1 = exp(s1) / (1 + exp(s1));"                                                                                       
+                ,"    double h = (exp(xx) / (1 + exp(xx)) - h0) / (h1 - h0);"                                                                     
+                ,"    return y0 + (y1 - y0) * h;"                                                                                                 
+                ,"};"                                                                                                                             
+                ,"dyn.Obs(t, 0, 0, 0) = estimate_Rt(P, dyn, t, 0, 50);"                                                                           
+                ,sprintf("dyn.Obs(t, 0, 1, 0) = dyn(\"death_o\", t, {}, {}) * asc((t - P.time0) / (%s - P.time0), x[3], x[4], -x[5], x[6]);",endt)         
+                ,sprintf("dyn.Obs(t, 0, 2, 0) = dyn(\"cases_reported\", t, {}, {}) * asc((t - P.time0) / (%s - P.time0), x[8], x[9], -x[10], x[11]);",endt)
             )
         )
     )
@@ -272,13 +273,13 @@ check = function(fit_filename, epi_location)
     
     pl1 = ggplot(test[group == 2 & t >= 59, .(d = obs0), by = .(run, t)]) + 
         geom_point(aes(x = t + ymd("2020-01-01"), y = d, colour = run)) +
-        geom_line(data = epi[location == epi_location & date <= "2020-09-15"], aes(x = date, y = deaths)) +
+        geom_line(data = epi[location == epi_location], aes(x = date, y = deaths)) +
         scale_x_date(date_breaks = "1 month", date_labels = "%b") +
         theme(legend.position = "none") + labs(x = NULL, y = "Deaths", title = epi_location)
     
     pl2 = ggplot(test[group == 3 & t >= 59, .(d = obs0), by = .(run, t)]) + 
         geom_point(aes(x = t + ymd("2020-01-01"), y = d, colour = run)) +
-        geom_line(data = epi[location == epi_location & date <= "2020-09-15"], aes(x = date, y = cases)) +
+        geom_line(data = epi[location == epi_location], aes(x = date, y = cases)) +
         scale_x_date(date_breaks = "1 month", date_labels = "%b") +
         theme(legend.position = "none") + labs(x = NULL, y = "Cases")
     
@@ -305,13 +306,7 @@ check = function(fit_filename, epi_location)
 
 
 # trim epi data
-epi = epi[date <= "2020-09-15"]
-
-dic("fitdS0.qs")
-dic("fitdSl.qs")
-dic("fitdSw_5.0.qs")
-dic("fitdSw_2.5.qs")
-dic("fitdSw_1.0.qs")
+# epi = epi[date <= "2020-09-15"]
 
 # Model sets for Sindh paper
 fitS0 = do_fitting("Sind",            "Pakistan", "Sindh", "Sindh",             waning = FALSE, demographics = TRUE, contact = FALSE, burn_in = 6000, R0prior = "N 2.4 1.2 T 2 6 I 2.39 2.41")
@@ -325,9 +320,43 @@ qsave(fitSw_2.5, "fitdSw_2.5.qs")
 fitSw_5.0 = do_fitting("Sind",        "Pakistan", "Sindh", "Sindh",             waning = 1 / (365 * 5.0), demographics = TRUE, contact = FALSE, burn_in = 6000, R0prior = "N 2.4 1.2 T 2 6 I 2.39 2.41")
 qsave(fitSw_5.0, "fitdSw_5.0.qs")
 
+dic("fitdS0.qs")
+dic("fitdSl.qs")
+dic("fitdSw_5.0.qs")
+dic("fitdSw_2.5.qs")
+dic("fitdSw_1.0.qs")
+
+
 check("fitdS0.qs", "Sindh") # yep
 check("fitdSl.qs", "Sindh") # 
 check("fitSl.qs", "Sindh") # 
 check("fitdSw_1.0.qs", "Sindh") # 
 check("fitdSw_2.5.qs", "Sindh") # 
 check("fitdSw_5.0.qs", "Sindh") # 
+
+odds <- function(x, odds_ratio) {
+    res <- (x / (1 - x))*odds_ratio
+    return(res / (res + 1))
+}  
+
+asc.dt <- data.table(expand.grid(t=0:endt, sample = 1:100))
+asc.dt[, x := t / endt ]
+asc <- function(x, y0, y_lo, s0, s1) {
+    y1 = odds(y0, exp(y_lo))                                                                                  
+    xx = s0 + x * (s1 - s0)
+    h0 = exp(s0) / (1 + exp(s0))
+    h1 = exp(s1) / (1 + exp(s1))
+    h = (exp(xx) / (1 + exp(xx)) - h0) / (h1 - h0)
+    return(y0 + (y1 - y0) * h)
+}
+
+
+thing <- as.data.table(qread("fitdSw_5.0.qs")$post)[sample(.N, 100, replace = TRUE)][, sample := 1:.N ]
+
+asc.dt[thing, on=.(sample), c("death_asc", "case_asc") := .(asc(x, ad_y0, ad_y_lo, -ad_s0, ad_s1), asc(x, ac_y0, ac_y_lo, -ac_s0, ac_s1))]
+
+ggplot(melt(asc.dt, id.vars = c("sample","t"), measure.vars = c("case_asc","death_asc"))) +
+    aes(t, value, group = sample) +
+    facet_grid(variable ~ ., scales = "free_y") +
+    geom_line(alpha = 0.05) +
+    theme_minimal()
