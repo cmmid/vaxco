@@ -25,7 +25,7 @@ comb.fits <- qread(.args[1])
 samples <- 250
 
 all.dyn <- rbindlist(mapply(function(ft, nm) {
-    ft$par$deterministic <- FALSE
+    ft$par$deterministic <- TRUE
     ft$par$time1 <- as.Date("2021-12-31")
     
     dyn <- rbindlist(

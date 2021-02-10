@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
 .debug <- "~/Dropbox/Covid-WHO-vax/outputs"
 .args <- if (interactive()) sprintf(c(
     "%s/sim_model.rds",
-    "data_fitting/sindh_cases_deaths_2020-01-20.csv",
+    "data_fitting/epi_data.rds",# "data_fitting/epi_data.csv",
     "fitd_combined.qs",
     "%s/figures/model_fit.png"
 ), .debug)
@@ -16,41 +16,51 @@ suppressPackageStartupMessages({
 all.dyn <- readRDS(.args[1])
 
 #' TODO regularize getting this
-obs.dt = melt(fread(.args[2])[location == "Sindh"], id.vars = 1:2, variable.name = "ind");
+# obs.dt = melt(fread(.args[2])[location == "Sindh"], id.vars = 1:2, variable.name = "ind");
+obs.dt <- melt(readRDS(.args[2]), id.vars = c(1, 2, 5, 6), variable.name = "ind")
+# obs.dt = melt(fread(.args[2])[location == "Sindh"], id.vars = 1:2, variable.name = "ind");
 #' assert: no missing dates
 obs.dt[order(date), rolling := frollmean(value, 7), by = ind ]
 
 comb.fits <- qread(.args[3])
 
+tarscn <- 4
 mdlcols <- c("black", scales::hue_pal()(4))
 scns <- c("reported", "Inf","5.0","2.5","1.0")
+
+
+from.date <- as.Date("2020-03-01")
+
 
 inc.p <- function(
     dt, ylab, tarind = dt[,unique(ind)], mdlcol = "dodgerblue"
 ) ggplot(dt) +
     aes(date, value, group = run) +
     geom_line(aes(color="model"), alpha = 0.02) +
-    geom_point(aes(color="reported", group = NULL), obs.dt[ind == tarind], alpha = 0.2) +
-    geom_line(aes(y=rolling, color="reported", group = NULL), obs.dt[ind == tarind]) +
+    geom_point(aes(color="reported", group = NULL), obs.dt[ind == tarind & value >= 1 & between(date, from.date, dt[, max(date)]) ], alpha = 0.2) +
+    geom_line(aes(y=rolling, color="reported", group = NULL), obs.dt[ind == tarind & between(date, from.date, dt[, max(date)]) ]) +
     scale_x_date(
         name = NULL, date_breaks = "months", date_labels = "%b"
     ) + scale_y_log10(name = ylab) +
     scale_color_manual(name = NULL, values = c(model = mdlcol, reported="black")) +
-    coord_cartesian(expand = FALSE, clip = "off")
+    coord_cartesian(
+      expand = FALSE,
+      ylim = c(1, dt[,10^ceiling(log10(max(value)))])
+    )
 
 pcases <- inc.p(all.dyn[
-    scenario == scns[5] & epi == "reported" & ind == "cases" & between(date, "2020-04-15", "2020-09-15")
-], "New Cases", mdlcol = mdlcols[5])
+    scenario == scns[tarscn] & epi == "reported" & ind == "cases" & between(date, from.date, "2020-09-15")
+], "New Cases", mdlcol = mdlcols[tarscn])
 
 pdeaths <- inc.p(all.dyn[
-    scenario == scns[5] & epi == "reported" & ind == "deaths" & between(date, "2020-04-15", "2020-09-15")
-], "New Deaths", mdlcol = mdlcols[5])
+    scenario == scns[tarscn] & epi == "reported" & ind == "deaths" & between(date, from.date, "2020-09-15")
+], "New Deaths", mdlcol = mdlcols[tarscn])
 
 pext <- function(dt, ylab, tarind = dt[,unique(ind)]) ggplot(dt) +
     aes(date, value, group = interaction(run, scenario), color = scenario) +
     geom_line(alpha = 0.02) +
-    geom_point(aes(color="reported", group = NULL), obs.dt[ind == tarind], alpha = 0.2) +
-    geom_line(aes(y=rolling, color="reported", group = NULL), obs.dt[ind == tarind]) +
+    geom_point(aes(color="reported", group = NULL), obs.dt[ind == tarind & value >= 1 & date >= from.date], alpha = 0.2) +
+    geom_line(aes(y=rolling, color="reported", group = NULL), obs.dt[ind == tarind & date >= from.date]) +
     scale_x_date(
         name = NULL, date_breaks = "months", date_labels = "%b"
     ) + scale_y_log10(name = ylab) +
@@ -59,14 +69,16 @@ pext <- function(dt, ylab, tarind = dt[,unique(ind)]) ggplot(dt) +
         breaks = scns,
         values = mdlcols
     ) +
-    coord_cartesian(expand = FALSE, ylim = c(1,NA))
+    coord_cartesian(
+      expand = FALSE, ylim = c(1, dt[,10^ceiling(log10(max(value)))])
+    )
 
 pext.cases <- pext(all.dyn[
-  epi == "reported" & ind == "cases" & date > "2020-04-15"
+  epi == "reported" & ind == "cases" & date >= from.date
 ], "New Cases")
 
 pext.deaths <- pext(all.dyn[
-    epi == "reported" & ind == "deaths" & date > "2020-04-15"
+    epi == "reported" & ind == "deaths" & date >= from.date
 ], "New Deaths")
 
 pop <- sum(comb.fits[[1]]$par$pop[[1]]$size)
@@ -139,11 +151,11 @@ sero.ext <- function(dt) ggplot(dt) +
     coord_cartesian(ylim = c(0, 0.75), expand = FALSE)
 
 psero <- sero.p(all.dyn[
-    scenario == scns[5] & outcome == "totR" & between(date, "2020-04-15", "2020-09-15")
-], mdlcols[5])
+    scenario == scns[tarscn] & outcome == "totR" & between(date, from.date, "2020-09-15")
+], mdlcols[tarscn])
 
 pext.sero <- sero.ext(all.dyn[
-    outcome == "totR" & date > "2020-04-15"
+    outcome == "totR" & date >= from.date
 ])
 
 res <- ((guide_area() / pcases / pdeaths / psero) +

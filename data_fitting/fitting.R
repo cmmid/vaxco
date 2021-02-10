@@ -1,28 +1,30 @@
-library(data.table)
-library(ggplot2)
-library(cowplot)
-library(lubridate)
-library(cowplot)
-library(readxl)
-library(socialmixr)
-library(qs)
-library(zoo)
-library(stringr)
-library(socialmixr)
+
+suppressPackageStartupMessages({
+    require(data.table)
+    require(lubridate)
+    require(readxl)
+    require(socialmixr)
+    require(qs)
+    require(zoo)
+    require(stringr)
+    require(socialmixr)
+    require(jsonlite)
+})
+
 
 .args <- if (interactive()) c(
     "helper.R", "fitting_setup.R", "process_def.R",
     "epi_data.rds", "mob_data.rds",
     "birthrates.csv", "mortality.csv",
+    "S0.json",
     "../../covidm-vaxco",
-    "output.rds"
+    "fitdS0.qs"
 )
 
 #' set up covidm
 cm_path = tail(.args, 2)[1];
 cm_force_rebuild = F;
 cm_build_verbose = T;
-cm_force_shared = T;
 cm_version = 2;
 source(file.path(cm_path, "R","covidm.R"))
 
@@ -33,6 +35,8 @@ epi = readRDS(.args[4])
 mob = readRDS(.args[5])
 birthrates = fread(.args[6])
 mortality = fread(.args[7])
+config <- read_json(.args[8])
+
 
 end.date <- min(epi[, max(date)],mob[, max(date)])
 endt <- as.integer(end.date - as.Date("2020-01-01"))
@@ -100,27 +104,70 @@ make_params = function(
     return (params)
 }
 
+create_priors <- function(
+    t0 = "U 0 60", #' theta[0]
+    R0 = "N 2.4 1.2 T 0 6",
+    ad_sd = "N 0 5 T 1 100",
+    ad_y0 = "B 1 1",
+    ad_y_lo = "N 0 0.5 T 0 2",
+    ad_s0 = "E 1 1",
+    ad_s1 = "E 1 1",
+    ac_sd = "N 0 50 T 1 1000",
+    ac_y0 = "B 1 1",
+    ac_y_lo = "N 0 0.5 T 0 2",
+    ac_s0 = "E 0.1 0.1",
+    ac_s1 = "E 0.1 0.1",
+    ...
+) c(as.list(environment()), list(...))
 
-do_fitting = function(dem, mat, epi_loc, mob_loc, waning, contact, demographics = FALSE, lmic_shift = 1, burn_in = 2000, 
+#' assert:
+#'  - epi is filtered to the relevant location
+#'  - it's either smoothed or not
+create_cpp_lik = function(date0, epi, i_contact)
+{
+    # epi2 = epi[location == loc];
+    # if (smooth) {
+    #     epi2 = epi2[order(date), .(date, cases = rollmean(cases, 7, fill = NA), deaths = rollmean(deaths, 7, fill = NA)), by = location]
+    # }
+
+    epiloc <- copy(epi)[, t := as.numeric(date-as.Date(date0)) ]
+    
+    ret = c(
+        epiloc[!is.na(deaths),
+            sprintf(
+                     'll += binom(', deaths, ', dyn.Obs(', t, ', 0, 1, 0), x[2]);'
+                     #'{ double d = dyn.Obs(', t, ', 0, 1, 0) - ', deaths, '; ll += -0.5 * (d / x[2]) * (d / x[2]) - log(x[2] * sqrt(2 * M_PI)); }'
+        )],
+            epi2[location == loc & !is.na(cases)
+                 , paste0(
+                     '{ double d = dyn.Obs(', t, ', 0, 2, 0) - ', cases,  '; ll += -0.5 * (d / x[7]) * (d / x[7]) - log(x[7] * sqrt(2 * M_PI)); }'
+                 )]
+    )
+    
+    if (!is.na(i_contact)) {
+        ret = c(ret, 
+                sprintf('if (x[%i] < x[%i + 1]) ll += -1000;', i_contact, i_contact)
+        )
+    }
+    
+    return (ret)
+}
+
+
+
+
+
+do_fitting = function(
+    dem, mat,
+    epi_loc, mob_loc,
+    waning, contact,
+    demographics = FALSE, lmic_shift = 1, burn_in = 2000, 
     R0prior = "N 2.4 1.2 T 0 6", smooth = FALSE)
 {
     par = make_params(dem, mat, mob_loc, lmic_shift, waning, demographics);
 
     # Set priors
-    priors = list(
-        t0 = "U 0 60",
-        R0 = R0prior,
-        ad_sd = "N 0 5 T 1 100",
-        ad_y0 = "B 1 1",
-        ad_y_lo = "N 0 0.5 T 0 2",
-        ad_s0 = "E 1 1",
-        ad_s1 = "E 1 1",
-        ac_sd = "N 0 50 T 1 1000",
-        ac_y0 = "B 1 1",
-        ac_y_lo = "N 0 0.5 T 0 2",
-        ac_s0 = "E 0.1 0.1",
-        ac_s1 = "E 0.1 0.1"
-    );
+    priors = create_params(R0 = R0prior)
     
     i_wn = NA;
     if (waning == TRUE) {
@@ -147,16 +194,15 @@ do_fitting = function(dem, mat, epi_loc, mob_loc, waning, contact, demographics 
     {
         epi2 = epi[location == loc];
         if (smooth) {
-            epi2 = epi2[order(date)]
-            epi2 = epi2[, .(date, cases = rollmean(cases, 7, fill = NA), deaths = rollmean(deaths, 7, fill = NA)), by = location]
+            epi2 = epi2[order(date), .(date, cases = rollmean(cases, 7, fill = NA), deaths = rollmean(deaths, 7, fill = NA)), by = location]
         }
         ret = NULL;
     
         ret = c(ret,
-            epi2[location == loc & !is.na(deaths) 
-                , paste0(
-                #'ll += nbinom(', deaths, ', max(0.1, dyn.Obs(', as.numeric(ymd(date) - ymd(params$date0)), ', 0, 1, 0)), x[2]);'
-                '{ double d = dyn.Obs(', as.numeric(ymd(date) - ymd(params$date0)), ', 0, 1, 0) - ', deaths, '; ll += -0.5 * (d / x[2]) * (d / x[2]) - log(x[2] * sqrt(2 * M_PI)); }'
+            epi2[location == loc & !is.na(deaths),
+                 paste0(
+                'll += binom(', deaths, ', dyn.Obs(', t, ', 0, 1, 0), x[2]);'
+                #'{ double d = dyn.Obs(', as.numeric(ymd(date) - ymd(params$date0)), ', 0, 1, 0) - ', deaths, '; ll += -0.5 * (d / x[2]) * (d / x[2]) - log(x[2] * sqrt(2 * M_PI)); }'
             )],
             epi2[location == loc & !is.na(cases)
                 , paste0(
@@ -166,7 +212,7 @@ do_fitting = function(dem, mat, epi_loc, mob_loc, waning, contact, demographics 
         
         if (!is.na(i_contact)) {
             ret = c(ret, 
-                str_glue('if (x[{i_contact}] < x[{i_contact + 1}]) ll += -1000;')
+                sprintf('if (x[%i] < x[%i + 1]) ll += -1000;', i_contact, i_contact)
             )
         }
             
@@ -184,7 +230,7 @@ do_fitting = function(dem, mat, epi_loc, mob_loc, waning, contact, demographics 
                 
                 ## for waning
                 ifelse(waning == TRUE,
-                    str_glue('P.pop[0].wn = vector<double>(16, x[{i_wn - 1}]);'),
+                    sprintf('P.pop[0].wn = vector<double>(16, x[%i]);', i_wn - 1),
                     ""
                 ),
 
@@ -199,7 +245,10 @@ do_fitting = function(dem, mat, epi_loc, mob_loc, waning, contact, demographics 
                         '    return y0 + (y1 - y0) * h;',
                         '};',
 
-                        str_glue('double Y0 = x[{i_contact - 1}], Y1 = x[{i_contact}], S0 = x[{i_contact + 1}], S1 = x[{i_contact + 2}];'),
+                        sprintf(
+                            'double Y0 = x[%i-1], Y1 = x[%i], S0 = x[%i+1], S1 = x[%i+2];',
+                            i_contact, i_contact, i_contact, i_contact
+                        ),
                         'for (unsigned int ch = 0; ch < P.changes.ch[0].times.size(); ++ch) {',
                         '    double td = P.changes.ch[0].times[ch];',
                         '    double q = (td < 100) ? asc0(td / 100, 0, Y0, -32.4, 7.6) : ((td < 365) ? (asc0((td - 100) / (365 - 100), Y0, Y1, -S0, S1)) : Y1);',
@@ -309,54 +358,61 @@ check = function(fit_filename, epi_location)
 # epi = epi[date <= "2020-09-15"]
 
 # Model sets for Sindh paper
-fitS0 = do_fitting("Sind",            "Pakistan", "Sindh", "Sindh",             waning = FALSE, demographics = TRUE, contact = FALSE, burn_in = 6000, R0prior = "N 2.4 1.2 T 2 6 I 2.39 2.41")
-qsave(fitS0, "fitdS0.qs")
-fitSl = do_fitting("Sind",            "Pakistan", "Sindh", "Sindh",             waning = FALSE, demographics = TRUE, contact = FALSE, burn_in = 6000, R0prior = "N 2.3 0.01 T 2.28 2.32")
-qsave(fitSl, "fitdSl.qs")
-fitSw_1.0 = do_fitting("Sind",        "Pakistan", "Sindh", "Sindh",             waning = 1 / (365 * 1.0), demographics = TRUE, contact = FALSE, burn_in = 6000, R0prior = "N 2.4 1.2 T 2 6 I 2.39 2.41")
-qsave(fitSw_1.0, "fitdSw_1.0.qs")
-fitSw_2.5 = do_fitting("Sind",        "Pakistan", "Sindh", "Sindh",             waning = 1 / (365 * 2.5), demographics = TRUE, contact = FALSE, burn_in = 6000, R0prior = "N 2.4 1.2 T 2 6 I 2.39 2.41")
-qsave(fitSw_2.5, "fitdSw_2.5.qs")
-fitSw_5.0 = do_fitting("Sind",        "Pakistan", "Sindh", "Sindh",             waning = 1 / (365 * 5.0), demographics = TRUE, contact = FALSE, burn_in = 6000, R0prior = "N 2.4 1.2 T 2 6 I 2.39 2.41")
-qsave(fitSw_5.0, "fitdSw_5.0.qs")
+res <- do.call(do_fitting, config)
+qsave(res, tail(.args, 1))
+if(interactive()) {
+    dic(tail(.args, 1))
+    check(tail(.args, 1), "Sindh")
+} 
 
-dic("fitdS0.qs")
-dic("fitdSl.qs")
-dic("fitdSw_5.0.qs")
-dic("fitdSw_2.5.qs")
-dic("fitdSw_1.0.qs")
+# fitS0 = do_fitting("Sind",            "Pakistan", "Sindh", "Sindh",             waning = FALSE, demographics = TRUE, contact = FALSE, burn_in = 6000, R0prior = "N 2.4 1.2 T 2 6 I 2.39 2.41")
+# qsave(fitS0, "fitdS0.qs")
+# fitSl = do_fitting("Sind",            "Pakistan", "Sindh", "Sindh",             waning = FALSE, demographics = TRUE, contact = FALSE, burn_in = 6000, R0prior = "N 2.3 0.01 T 2.28 2.32")
+# qsave(fitSl, "fitdSl.qs")
+# fitSw_1.0 = do_fitting("Sind",        "Pakistan", "Sindh", "Sindh",             waning = 1 / (365 * 1.0), demographics = TRUE, contact = FALSE, burn_in = 6000, R0prior = "N 2.4 1.2 T 2 6 I 2.39 2.41")
+# qsave(fitSw_1.0, "fitdSw_1.0.qs")
+# fitSw_2.5 = do_fitting("Sind",        "Pakistan", "Sindh", "Sindh",             waning = 1 / (365 * 2.5), demographics = TRUE, contact = FALSE, burn_in = 6000, R0prior = "N 2.4 1.2 T 2 6 I 2.39 2.41")
+# qsave(fitSw_2.5, "fitdSw_2.5.qs")
+# fitSw_5.0 = do_fitting("Sind",        "Pakistan", "Sindh", "Sindh",             waning = 1 / (365 * 5.0), demographics = TRUE, contact = FALSE, burn_in = 6000, R0prior = "N 2.4 1.2 T 2 6 I 2.39 2.41")
+# qsave(fitSw_5.0, "fitdSw_5.0.qs")
 
-
-check("fitdS0.qs", "Sindh") # yep
-check("fitdSl.qs", "Sindh") # 
-check("fitSl.qs", "Sindh") # 
-check("fitdSw_1.0.qs", "Sindh") # 
-check("fitdSw_2.5.qs", "Sindh") # 
-check("fitdSw_5.0.qs", "Sindh") # 
-
-odds <- function(x, odds_ratio) {
-    res <- (x / (1 - x))*odds_ratio
-    return(res / (res + 1))
-}  
-
-asc.dt <- data.table(expand.grid(t=0:endt, sample = 1:100))
-asc.dt[, x := t / endt ]
-asc <- function(x, y0, y_lo, s0, s1) {
-    y1 = odds(y0, exp(y_lo))                                                                                  
-    xx = s0 + x * (s1 - s0)
-    h0 = exp(s0) / (1 + exp(s0))
-    h1 = exp(s1) / (1 + exp(s1))
-    h = (exp(xx) / (1 + exp(xx)) - h0) / (h1 - h0)
-    return(y0 + (y1 - y0) * h)
-}
+# dic("fitdS0.qs")
+# dic("fitdSl.qs")
+# dic("fitdSw_5.0.qs")
+# dic("fitdSw_2.5.qs")
+# dic("fitdSw_1.0.qs")
 
 
-thing <- as.data.table(qread("fitdSw_5.0.qs")$post)[sample(.N, 100, replace = TRUE)][, sample := 1:.N ]
+# check("fitdS0.qs", "Sindh") # yep
+# check("fitdSl.qs", "Sindh") # 
+# check("fitSl.qs", "Sindh") # 
+# check("fitdSw_1.0.qs", "Sindh") # 
+# check("fitdSw_2.5.qs", "Sindh") # 
+# check("fitdSw_5.0.qs", "Sindh") # 
 
-asc.dt[thing, on=.(sample), c("death_asc", "case_asc") := .(asc(x, ad_y0, ad_y_lo, -ad_s0, ad_s1), asc(x, ac_y0, ac_y_lo, -ac_s0, ac_s1))]
-
-ggplot(melt(asc.dt, id.vars = c("sample","t"), measure.vars = c("case_asc","death_asc"))) +
-    aes(t, value, group = sample) +
-    facet_grid(variable ~ ., scales = "free_y") +
-    geom_line(alpha = 0.05) +
-    theme_minimal()
+# odds <- function(x, odds_ratio) {
+#     res <- (x / (1 - x))*odds_ratio
+#     return(res / (res + 1))
+# }  
+# 
+# asc.dt <- data.table(expand.grid(t=0:endt, sample = 1:100))
+# asc.dt[, x := t / endt ]
+# asc <- function(x, y0, y_lo, s0, s1) {
+#     y1 = odds(y0, exp(y_lo))                                                                                  
+#     xx = s0 + x * (s1 - s0)
+#     h0 = exp(s0) / (1 + exp(s0))
+#     h1 = exp(s1) / (1 + exp(s1))
+#     h = (exp(xx) / (1 + exp(xx)) - h0) / (h1 - h0)
+#     return(y0 + (y1 - y0) * h)
+# }
+# 
+# 
+# thing <- as.data.table(qread("fitdSw_5.0.qs")$post)[sample(.N, 100, replace = TRUE)][, sample := 1:.N ]
+# 
+# asc.dt[thing, on=.(sample), c("death_asc", "case_asc") := .(asc(x, ad_y0, ad_y_lo, -ad_s0, ad_s1), asc(x, ac_y0, ac_y_lo, -ac_s0, ac_s1))]
+# 
+# ggplot(melt(asc.dt, id.vars = c("sample","t"), measure.vars = c("case_asc","death_asc"))) +
+#     aes(t, value, group = sample) +
+#     facet_grid(variable ~ ., scales = "free_y") +
+#     geom_line(alpha = 0.05) +
+#     theme_minimal()

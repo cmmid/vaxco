@@ -5,7 +5,7 @@ suppressPackageStartupMessages({
 })
 
 .args <- if (interactive()) c(
-    "sindh.json",
+    "sindh_datastudio.json",
     "epi_data.rds"
 ) else commandArgs(trailingOnly = TRUE)
 
@@ -42,17 +42,63 @@ sindh <- dcast(rbind(
     extract(case_inc, sindh_raw, "cases"),
     extract(death_inc, sindh_raw, "deaths")[1:2],
     extract(death_cum, sindh_raw, "deaths", cumulative = TRUE)
-), date ~ measure)[, location := "Sindh" ]
+), date ~ measure)[, location := "Sindh" ][, provenance := "reported" ]
+
+#' want to fill in pre-April / late April data
+#' determine pre-incidence deaths:
+predeath <- extract(death_cum, sindh_raw, "deaths")[1][sindh, on=.(date), value - deaths, nomatch = 0 ]
+precases <- extract(case_cum, sindh_raw, "cases")[1][sindh, on=.(date), value - cases, nomatch = 0 ]
+
+#' need the all-Pakistan data
+jhurl <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+casesurl <- sprintf("%s/time_series_covid19_confirmed_global.csv", jhurl)
+deathsurl <- sprintf("%s/time_series_covid19_deaths_global.csv", jhurl)
+
+fetch <- function(url, vn) melt(fread(url)[
+  `Country/Region` == "Pakistan"
+][, -c(1,3,4) ], id.vars = "Country/Region", variable.name = "date", value.name = vn)
+
+#' fetch ECDC data; requires network connection
+cases.dt <- fetch(casesurl, "cases")
+deaths.dt <- fetch(deathsurl, "deaths")
+
+res <- cases.dt[deaths.dt, on=.(`Country/Region`, date)]
+res[, date := as.Date(date, format = "%m/%d/%y") ]
+
+#' select the columns of interest; order by key columns
+pakistan <- res[order(date),
+             .(date, cases = c(cases[1], diff(cases)), deaths = c(deaths[1], diff(deaths))),
+             keyby=.(
+               location = `Country/Region`
+             )
+]
+
+ref <- pakistan[sindh, on=.(date)][
+  date < "2020-07-01", .(dp = sum(i.deaths)/sum(deaths), cp = sum(i.cases)/sum(cases))
+]
+
+res <- sindh[
+  pakistan, on=.(date),
+  .(
+    location = "Sindh", date = date,
+    cases = fifelse(is.na(cases), round(ref$cp*i.cases), cases),
+    deaths = fifelse(is.na(deaths), round(ref$dp*i.deaths), deaths),
+    provenance = fifelse(is.na(cases), "imputed", "reported")
+  )
+]
+
+testing <- fread("testing.csv", col.names = c("date","tests"))
+
+res[testing, on=.(date), testpos := cases / tests ]
 
 #' @examples 
-#' require(ggplot2)
-#' ggplot(sindh) +
-#'   geom_point(aes(date, cases, colour = "cases"), alpha = 0.5) +
-#'   geom_point(aes(date, deaths, colour = "deaths"), alpha = 0.5) +
-#'   geom_line(aes(date, frollmean(cases,7), colour = "cases")) +
-#'   geom_line(aes(date, frollmean(deaths,7), colour = "deaths")) +
-#'   theme_minimal() +
-#'   scale_y_log10() +
-#'   scale_x_date(date_breaks = "months", date_labels = "%b")
+#' ggplot(res) + aes(date, color = provenance) +
+#'  geom_line(aes(y=cases)) +
+#'  geom_line(aes(y=deaths)) +
+#'  scale_y_log10()
+#'  
+#' ggplot(res) + aes(date, color = provenance) +
+#'  geom_line(aes(y=testpos)) +
+#'  scale_y_continuous(trans = "logit")
 
-saveRDS(sindh, tail(.args, 1))
+saveRDS(res, tail(.args, 1))
