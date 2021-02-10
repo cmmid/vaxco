@@ -1,0 +1,11 @@
+{
+    "dem": "Sind",
+    "mat": "Pakistan",
+    "epi_loc": "Sindh",
+    "mob_loc": "Sindh",
+    "waning": false,
+    "demographics":  true,
+    "contact": false,
+    "burn_in": 6000,
+    "R0prior": "N 2.4 1.2 T 2 6 I 2.39 2.41"
+}
