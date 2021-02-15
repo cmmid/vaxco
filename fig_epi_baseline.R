@@ -3,6 +3,7 @@ suppressPackageStartupMessages({
     require(data.table)
     require(ggplot2)
     require(ggh4x)
+    require(RSQLite)
 })
 
 .debug <- "~/Dropbox/Covid-WHO-vax/outputs"
@@ -63,8 +64,8 @@ fig.p <- ggplot(fig.wide) + aes(anni_date) +
             variable = c(cases = "Annual Cases", deaths = "Annual Deaths")
         ), switch = "y"
     ) +
-    geom_ribbon(aes(ymin=lo95, ymax=hi95), alpha = 0.1) +
-    geom_ribbon(aes(ymin=lo50, ymax=hi50), alpha = 0.2) +
+    geom_ribbon(aes(ymin=lo95, ymax=hi95), alpha = 0.3) +
+    geom_ribbon(aes(ymin=lo50, ymax=hi50), alpha = 0.3) +
     geom_line(aes(y = md)) +
     scale_y_continuous(NULL, labels = scales::label_number_si()) +
     scale_x_date(
