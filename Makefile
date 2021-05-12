@@ -21,16 +21,19 @@ CONFEXT ?= ${ODIR}/config_ext.sqlite
 DBPAT := ${METPAT}%.sqlite
 ODBPAT := ${OTHPAT}%.sqlite
 
-CMPTH ?= ../covidm-vaxco
+# local copy required
+CMPTH := covidm
 CMURL := git@github.com:nicholasdavies/covidm.git
 
-${CMPATH}:
-	cd $(dir ${CMPATH}); git clone ${CMURL} $(notdir ${CMPATH})
+${CMPTH}:
+	cd $(dir $@); git clone ${CMURL} $(notdir $@)
 
 DATAPTH ?= .
 FITS := fit_sindh.qs $(shell cd ${DATAPTH}; ls fit_sindh_waning_*.qs)
 DFITS := fitd_sindh.qs $(shell cd ${DATAPTH}; ls fitd_sindh_waning_*.qs)
 DATASRC := $(addprefix ${DATAPTH}/,fitd_combined.qs epi_data.csv mob_data.csv)
+
+cm: ${CMPATH}
 
 # TODO add params.json
 ${CONFDB}: build_db.R $(firstword ${DFITS}) | ${CMPTH} ${IDIR}
