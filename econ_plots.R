@@ -3,179 +3,549 @@ require(RSQLite)
 require(data.table)
 require(ggplot2)
 
+# time-horizon (years)
+#TODO still needs manual tinkering if t-horizon is not 10
+
+t_horizon <- 10
+
 # paths
 path.in  <- "~/Dropbox/Covid-WHO-vax/inputs/"
 path.out <- "~/Dropbox/Covid-WHO-vax/outputs/"
 path.fig <- "~/Dropbox/Covid-WHO-vax/figures/"
 
-#load epi scenario info
+# load epi scenario info
 drv <- RSQLite::SQLite()
-conn <- dbConnect(drv, dbname=paste0(path.in,"config_high.sqlite"))
-
-epi_pars.dt  <- data.table(dbReadTable(conn,"parameter"))
+conn <- dbConnect(drv, dbname=paste0(path.out,"config.sqlite"))
 epi_scen.dt  <- data.table(dbReadTable(conn,"scenario"))
 
 dbDisconnect(conn)
 
+# load econ scenario info
+
+othercosts <- dcast(fread("covid_other_costs.csv"), perspective ~ name, value.var = "cost")
+vac_cost.dt <- fread("covid_vac_costs_per_dose.csv")[scenario == "campaign"]
+dalys.dt <- fread("daly_scenarios.csv")
+
+econ_scen.dt <- data.table(expand.grid(
+    perspective = othercosts[, unique(perspective)],
+    vac_price = vac_cost.dt[, unique(vac_price)],
+    daly_scenario = dalys.dt[, unique(daly_scenario)],
+    disc.costs = dalys.dt[, max(disc_rate)],
+    disc.dalys = dalys.dt[, unique(disc_rate)]
+))[, econ_id := 1:.N ]
+
+# econ_scen.dt <- data.table(readRDS(paste0(path.out,"econ_scns.rds")))
+
 # load results
 
-summary_icers.dt <- data.table(readRDS(paste0(path.out,"econ_summary_icer_inc.rds")))
-outcomes_icers.dt <- data.table(readRDS(paste0(path.out,"outcomes_icer_inc.rds")))
+epi.dt <- data.table(readRDS(paste0(path.out,"epi_quantile.rds")))
+econ.dt <- data.table(readRDS(paste0(path.out,"econ/merge.rds")))
 
-summary_inc.dt <- data.table(readRDS(paste0(path.out,"econ_summary_inc.rds")))
-outcomes_inc.dt <- data.table(readRDS(paste0(path.out,"outcomes_inc.rds")))
-
-
-
-# icer plots
-
-# icers
-plot.dt <- summary_icers.dt[outcome %in% c("icer") & anni_year == 10,]
-plot.dt <- merge(plot.dt, epi_scen.dt, by.x="scenarioId", by.y="id", all.x=T, all.y=F)
-plot.dt <- plot.dt[vax_eff %in% c(0.3,0.7),]
-
-plot.dt[, campaign := factor(fifelse(
-    strategy_str == 0, "Ongoing",
-    sprintf("%i-day", strategy_str)
-), levels = c(sprintf("%i-day", c(90, 365)), "Ongoing"), ordered = TRUE)]
-
-plot.dt[, tar_age := factor(fifelse(from_age==4,"Vaccinate 15+","Vaccinate 65+"), 
-                            levels = c("Vaccinate 15+","Vaccinate 65+"), ordered = TRUE)]
-
-plot.dt[, dur_imm := factor(fifelse(vax_imm_dur_days==912,"Vac. Dur. 2.5Y",
-                                    "Vac. Dur. 5Y"), 
-                            levels = c("Vac. Dur. 2.5Y","Vac. Dur. 5Y"), 
-                            ordered = TRUE)]
-
-plot.dt[, vac_price := factor(vac_price,level=c("low","med","high"))]
-
-plot_icer_1 <- ggplot(data = plot.dt, aes(x = vac_price, y = cum_inc_val.md, group = vac_price)) + 
-    geom_bar(position="dodge",stat="identity",aes(fill=vac_price)) +
-    scale_fill_brewer(palette = "Dark2", name="Vaccine Price") +
-    xlab("Vaccine Price") + ylab("ICER ($ per DALY Averted") + 
-    facet_grid (dur_imm + vax_eff ~ campaign + tar_age,   
-                labeller = labeller(
-        vax_eff = function(v) sprintf("Vac. Eff.= %s", v)
-    )) + theme_minimal()
-
-ggsave(paste0(path.fig,"plot_icer_1.png"), plot_icer_1, width = 10, height = 5, units = "in")
-
-
-# CE plane
-plot.dt <- outcomes_icers.dt[outcome %in% c("cost_total_disc","dalys.disc") & anni_year == 10,]
-plot.dt <- dcast(plot.dt,
-                 scenarioId + sampleId + vac_price + daly_scen ~ outcome,
-                 value.var = "cum_inc_val"
+epi.dt <- epi.dt[qtile %in% c("lo95","md","hi95")]
+econ.dt <- econ.dt[qtile %in% c("lo95","md","hi95") & # drop unused qtiles
+                       view == "incremental" # only need incremental values
+                   ]
+# qtiles long to wide format
+econ.dt <- dcast(
+    econ.dt, 
+    id + econ_id + view + anni_year ~ qtile,
+    value.var = c("costs","dalys","ccosts","cdalys","icer")
 )
-plot.dt <- merge(plot.dt, epi_scen.dt, by.x="scenarioId", by.y="id", all.x=T, all.y=F)
-plot.dt <- plot.dt[vax_eff %in% c(0.3,0.7),]
+epi.dt <- dcast(
+    epi.dt, 
+    id + age + anni_year ~ qtile,
+    value.var = c("cases","death_o","cases.del","death_o.del")
+)
 
-plot.dt[, campaign := factor(fifelse(
-    strategy_str == 0, "Ongoing",
-    sprintf("%i-day", strategy_str)
-), levels = c(sprintf("%i-day", c(90, 365)), "Ongoing"), ordered = TRUE)]
-
-plot.dt[, tar_age := factor(fifelse(from_age==4,"Vaccinate 15+","Vaccinate 65+"), 
-                            levels = c("Vaccinate 15+","Vaccinate 65+"), ordered = TRUE)]
-
-plot.dt[, dur_imm := factor(fifelse(vax_imm_dur_days==912,"Vac. Dur. 2.5Y",
-                                    "Vac. Dur. 5Y"), 
-                            levels = c("Vac. Dur. 2.5Y","Vac. Dur. 5Y"), 
-                            ordered = TRUE)]
-
-plot.dt[, vac_price := factor(vac_price,levels=c("low","med","high"),
-                              labels=c("V.P.=low","V.P.=med","V.P.=high"))]
-
-plot.dt[, daly_scen := factor(daly_scen,levels=c("low","high"),labels=c("DALYs=low","DALYs=high"))]
-
-plot_icer_2 <- ggplot(data = plot.dt, aes(x = dalys.disc, y = cost_total_disc, group = sampleId)) +
-    geom_point(size= 0.9, alpha = 0.8, aes(color = campaign, shape = tar_age)) +
-    scale_color_brewer(palette="Dark2", name="Campaign Duration") +
-    scale_shape(name="Target Age") +
-    xlab("Incremental DALYs") + ylab("Incremental Costs ($)") +
-    facet_grid (vax_eff + dur_imm ~ vac_price + daly_scen, 
-                labeller = labeller(
-        vax_eff = function(v) sprintf("Vac. Eff.= %s", v)
-    )) + 
-    scale_x_continuous(labels = scales::label_number_si()) +
-    scale_y_continuous(labels = scales::label_number_si()) +
-    theme_minimal() + theme(axis.text.x = element_text(angle = 45))
-
-ggsave(paste0(path.fig,"plot_icer_2.png"), plot_icer_2, width = 10, height = 5, units = "in")
+# join scenario details
+econ.dt <- econ_scen.dt[econ.dt, on = "econ_id"]
+econ.dt <- epi_scen.dt[econ.dt, on = "id"]
+econ.dt <- econ.dt[start_timing==18718] # just April 1st campaign start
 
 
+# find scenario ids for epi and econ base cases
 
-# cost plots
+base_id <- epi_scen.dt[#setId==0 &
+                           strategy=="campaign" &
+                           vax_mech=="infection" &
+                           eff_mech=="allornothing" &
+                           vax_eff==0.7 &
+                           nat_imm_dur_days==912 &
+                           vax_imm_dur_days==912 &
+                           start_timing==18718 &
+                           vax_delay==30 & # 2-dose regimen
+                           repeat_period==0 &
+                           repeat_number==0 &
+                           seasonality=="none" &
+                           doses_per_day==4000 &
+                           strategy_str==365 & # 1 year campaign
+                           from_age==14 &
+                           to_age==16 &
+                           R0=="fitted" &
+                           contact_matrix=="prem et al" &
+                           npis=="google mobility" &
+                           susceptibility=="nat med fit" &
+                           clin_frac=="nat med fit" &
+                           subclin_inf==0.5 &
+                           horizon==10 &
+                           birthdeath=="no" &
+                           hosp_model=="current" &
+                           icu_model=="current" &
+                           death_model=="current"
+                       ,id]
 
-# discounted annual incremental cost: cost_total_disc
-plot.dt <- summary_inc.dt[outcome %in% c("cost_total_disc")]
-plot.dt <- merge(plot.dt, epi_scen.dt, by.x="scenarioId", by.y="id", all.x=T, all.y=F)
-plot.dt <- plot.dt[vax_eff %in% c(0.3,0.7),]
-
-plot.dt[, campaign := factor(fifelse(
-    strategy_str == 0, "Ongoing",
-    sprintf("%i-day", strategy_str)
-), levels = c(sprintf("%i-day", c(90, 365)), "Ongoing"), ordered = TRUE)]
-
-plot.dt[, tar_age := factor(fifelse(from_age==4,"Vaccinate 15+","Vaccinate 65+"), 
-                            levels = c("Vaccinate 15+","Vaccinate 65+"), ordered = TRUE)]
-
-plot.dt[, dur_imm := factor(fifelse(vax_imm_dur_days==912,"Vac. Dur. 2.5Y",
-                                    "Vac. Dur. 5Y"), 
-                            levels = c("Vac. Dur. 2.5Y","Vac. Dur. 5Y"), 
-                            ordered = TRUE)]
-
-plot.dt[, vac_price := factor(vac_price,level=c("low","med","high"))]
-
-plot_cost_1 <- ggplot(data = plot.dt, aes(x = anni_year, y = inc_val.md, group = vac_price)) + 
-    geom_bar(position="dodge",stat="identity",aes(fill=vac_price)) +
-    scale_fill_brewer(palette = "Dark2", name="Vaccine Price") +
-    xlab("Years since programme start") + ylab("Discounted Annual Incremental Costs ($)") + 
-    facet_grid (dur_imm + vax_eff ~ campaign + tar_age,
-                labeller = labeller(
-        vax_eff = function(v) sprintf("Vac. Eff.= %s", v)
-    )) + 
-    scale_x_continuous(breaks=c(0,2,4,6,8,10)) +
-    scale_y_continuous(labels = scales::label_number_si()) +
-    theme_minimal()
-
-ggsave(paste0(path.fig,"plot_cost_1.png"), plot_cost_1, width = 10, height = 5, units = "in")
+base_econ_id <- econ_scen.dt[perspective=="health_system" &
+                                 vac_price==3 &
+                                 daly_scenario=="high" &
+                                 disc.costs==0.03 &
+                                 disc.dalys==0.00
+                             ,econ_id]
 
 
+# parameter list for vaccination base case 
 
-# daly plots
+base.list <- list(scen_name="Vaccine base case",
+                  #setId=0,
+                  strategy="campaign",
+                  vax_mech="infection",
+                  eff_mech="allornothing",
+                  vax_eff=0.7,
+                  nat_imm_dur_days=912,
+                  vax_imm_dur_days=912,
+                  start_timing=18718,
+                  vax_delay=30,
+                  repeat_period=0,
+                  repeat_number=0,
+                  seasonality="none",
+                  doses_per_day=4000,
+                  strategy_str=365,
+                  from_age=14,
+                  to_age=16,
+                  R0="fitted",
+                  contact_matrix="prem et al",
+                  npis="google mobility",
+                  susceptibility="nat med fit",
+                  clin_frac="nat med fit",
+                  subclin_inf=0.5,
+                  horizon=10,
+                  birthdeath="no",
+                  hosp_model="current",
+                  icu_model="current",
+                  death_model="current",
+                  perspective="health_system",
+                  vac_price=3,
+                  daly_scenario="high",
+                  disc.costs=0.03,
+                  disc.dalys=0.00
+)
 
-# discounted annual incremental dalys: cost_total_disc
-plot.dt <- summary_inc.dt[outcome %in% c("dalys.disc")]
-plot.dt <- merge(plot.dt, epi_scen.dt, by.x="scenarioId", by.y="id", all.x=T, all.y=F)
-plot.dt <- plot.dt[vax_eff %in% c(0.3,0.7),]
+# build data table for plots 
 
-plot.dt[, campaign := factor(fifelse(
-    strategy_str == 0, "Ongoing",
-    sprintf("%i-day", strategy_str)
-), levels = c(sprintf("%i-day", c(90, 365)), "Ongoing"), ordered = TRUE)]
+epi.base.list <- head(base.list,-5) # drop econ parameters
+epi.base.list <- tail(epi.base.list,-1) # drop econ parameters
 
-plot.dt[, tar_age := factor(fifelse(from_age==4,"Vaccinate 15+","Vaccinate 65+"), 
-                            levels = c("Vaccinate 15+","Vaccinate 65+"), ordered = TRUE)]
+vars <- c("strategy_str","nat_imm_dur_days") # epi vars for faceting plots
+epi.sens.list <- list()
+for (v in vars){
+    epi.base.list[[v]] <- NULL
+    epi.sens.list[[v]]<- unique(epi_scen.dt[!is.na(get(v)),get(v)])
+}
 
-plot.dt[, dur_imm := factor(fifelse(vax_imm_dur_days==912,"Vac. Dur. 2.5Y",
-                                    "Vac. Dur. 5Y"), 
-                            levels = c("Vac. Dur. 2.5Y","Vac. Dur. 5Y"), 
-                            ordered = TRUE)]
+plots.dt <- rbind(
+    data.table(do.call(expand.grid, c(epi.base.list,epi.sens.list))),
+    fill = TRUE
+)
 
-plot.dt[, daly_scen := factor(daly_scen,level=c("low","high"))]
+n <- names(plots.dt)
+plots.dt <- econ.dt[plots.dt,on=n]
 
-plot_daly_1 <- ggplot(data = plot.dt, aes(x = anni_year, y = -1*inc_val.md, group = daly_scen)) + 
-    geom_bar(position="dodge",stat="identity",aes(fill=daly_scen)) +
-    scale_fill_brewer(palette = "Dark2", name="DALY Scenario") +
-    xlab("Years since programme start") + ylab("Annual DALYs Averted") + 
-    facet_grid (dur_imm + vax_eff ~ campaign + tar_age, 
-                labeller = labeller(
-        vax_eff = function(v) sprintf("Vac. Eff.= %s", v)
-    )) +
-    scale_x_continuous(breaks=c(0,2,4,6,8,10)) +
-    scale_y_continuous(labels = scales::label_number_si()) +
-    theme_minimal()
+# fudge to get 10 year campaign in order - need to update
+plots.dt[strategy_str==0,strategy_str:=3650]
+plots.dt[order(strategy_str)]
 
-ggsave(paste0(path.fig,"plot_daly_1.png"), plot_daly_1, width = 10, height = 5, units = "in")
+refdate <- as.Date("2021-04-01")
+plots.dt[, anni_date := anni_year*365 + refdate ]
+# plot of incremental costs
+
+plt.costs <- function(meas = "costs_md", 
+                      lbl = "Annual Incremental Cost ($)",
+                      nat_imm_dur_days.lbl = c('365'="Natural immunity\n1 year",'912'="2.5 years", '1825'="5 years", 'Inf'="Life-long" ),
+                      strategy_str.lbl = c('3650'="10 year campaign",'365'="1 year campaign", '1825'="5 year campaign"),
+                      t_horizon = 10,
+                      showX = TRUE, 
+                      #high = "#56B1F7"
+                      high = "#FFA7A8",
+                      mid = "#BA585C",
+                      low = "#000000") ggplot(plots.dt[
+        daly_scenario == "high" & 
+        disc.dalys == 0.00 &
+        perspective %in% c("health_system","societal")
+]) +
+    facet_grid(
+        strategy_str ~ nat_imm_dur_days,
+        labeller = labeller(
+            nat_imm_dur_days = nat_imm_dur_days.lbl,
+            strategy_str = strategy_str.lbl
+        )
+    ) +
+    aes(
+        anni_date, color = vac_price,
+        linetype = factor(perspective),
+        group = interaction(vac_price, perspective)
+    ) +
+    geom_line(aes(y=get(meas))) +
+    theme_minimal() +
+    theme(legend.position="top") +
+    theme(
+        panel.border=element_rect(colour = "black", fill=NA, size=0.5),
+        panel.grid.minor = element_blank()
+    ) +
+    scale_color_gradient2(
+        "Vaccine price",
+        breaks = c(3,6,10),
+        labels = c("$3", "$6", "$10"),
+        guide = "legend",
+        #limits = c(3,10),
+        midpoint = 6,
+        low = low,
+        mid = mid,
+        high = high
+    ) +
+    scale_linetype_discrete(
+        name = "Cost perspective",
+        labels = c("Health system", "Societal")
+    ) +
+    scale_x_date(
+        "Calendar Year",
+        breaks = refdate + (0:10)*365,
+        date_labels = "'%y"
+    ) +
+    scale_y_continuous(
+        sprintf("%s", lbl), labels = scales::label_number_si()
+    )
+
+plot.costs <- plt.costs(t_horizon=t_horizon)
+plot.cum.costs <- plt.costs(meas="ccosts_md", lbl="Cumulative Incremental Cost ($)",t_horizon=t_horizon)
+
+tarfile <- sprintf("%sfig2_cost_plot_%s_time-horizon.png",path.fig,t_horizon)
+ggsave(tarfile, plot.costs, width = 7.5, height = 6, units = "in")
+
+# plot of incremental dalys
+
+plt.dalys <- function(meas = "dalys_md", 
+                      lbl = "Annual DALYs Averted",
+                      nat_imm_dur_days.lbl = c('365'="Natural immunity\n1 year",'912'="2.5 years", '1825'="5 years", 'Inf'="Life-long" ),
+                      strategy_str.lbl = c('3650'="10 year campaign",'365'="1 year campaign", '1825'="5 year campaign"),
+                      showX = TRUE, 
+                      t_horizon=10,
+                      #high = "#56B1F7"
+                      high = "#78B978") ggplot(plots.dt[
+        vac_price == 3 &
+        perspective == "health_system"
+]) +
+    facet_grid(
+        strategy_str ~ nat_imm_dur_days,
+        labeller = labeller(
+            nat_imm_dur_days = nat_imm_dur_days.lbl,
+            strategy_str = strategy_str.lbl
+        )
+    ) +
+    aes(
+        anni_date, color = disc.dalys,
+        linetype = factor(daly_scenario),
+        group = interaction(disc.dalys, daly_scenario)
+    ) +
+    geom_line(aes(y=get(meas))) +
+    theme_minimal() +
+    theme(legend.position="top") +
+    theme(
+        panel.border=element_rect(colour = "black", fill=NA, size=0.5),
+        panel.grid.minor = element_blank()
+    ) +
+    scale_color_continuous(
+        "Discount rate",
+        labels = c("0%", "3%"),
+        breaks = c(0.00,0.03),
+        guide = "legend",
+        high = high
+    ) +
+    scale_linetype_discrete(
+        name = "Comorbidities",
+        labels = c("The same as the\ngeneral population", 
+                   "Higher than the \ngeneral population")
+    ) +
+    scale_x_date(
+        "Calendar Year",
+        breaks = refdate + (0:10)*365,
+        date_labels = "'%y"
+    ) +
+    scale_y_continuous(
+        sprintf("%s", lbl), labels = scales::label_number_si()
+    )
+
+plot.dalys <- plt.dalys(t_horizon=t_horizon)
+plot.cum.dalys <- plt.dalys(meas="cdalys_md", lbl="Cumulative DALYs Averted",t_horizon=t_horizon)
+
+tarfile <- sprintf("%sfig3_daly_plot_%s_time-horizon.png",path.fig,t_horizon)
+ggsave(tarfile, plot.cum.dalys, width = 7.5, height = 6, units = "in")
+
+# plot of ICERS
+
+plt.icers1 <- function(meas = "icer_md", 
+                      lbl = "ICER ($)",
+                      nat_imm_dur_days.lbl = c('365'="Natural immunity\n1 year",'912'="2.5 years", '1825'="5 years", 'Inf'="Life-long" ),
+                      strategy_str.lbl = c('3650'="10 year campaign",'365'="1 year campaign", '1825'="5 year campaign"),
+                      showX = TRUE, 
+                      t_horizon=10,
+                      #high = "#56B1F7"
+                      high = "#6656F7") ggplot(plots.dt[
+                          daly_scenario == "high" & 
+                          disc.dalys == 0.00 &
+                          perspective %in% c("health_system","societal") #&
+                              #nat_imm_dur_days !="Inf"
+                      ]) +
+    facet_grid(
+        strategy_str ~ nat_imm_dur_days,
+        labeller = labeller(
+            nat_imm_dur_days = nat_imm_dur_days.lbl,
+            strategy_str = strategy_str.lbl
+        )
+    ) +
+    aes(
+        anni_year, color = vac_price,
+        linetype = factor(perspective),
+        group = interaction(vac_price, perspective)
+    ) +
+    geom_line(aes(y=get(meas))) +
+    theme_minimal() +
+    theme(legend.position="top") +
+    theme(
+        panel.border=element_rect(colour = "black", fill=NA, size=0.5),
+        panel.grid.minor = element_blank()
+    ) +
+    scale_color_continuous(
+        "Vaccine price",
+        breaks = c(3,6,10),
+        labels = c("$3", "$6", "$10"),
+        guide = "legend",
+        high = high
+    ) +
+    scale_linetype_discrete(
+        name = "Cost perspective",
+        labels = c("Health system", "Societal")
+    ) +
+    scale_x_continuous(
+        "Time-horizon (years)",
+        breaks = 0:10
+    ) +
+    scale_y_continuous(
+        sprintf("%s", lbl), labels = scales::label_number_si()
+    ) + 
+    coord_cartesian(ylim = c(-1000,5000),)
+
+plot.icers1 <- plt.icers1(t_horizon=t_horizon)
+
+tarfile <- sprintf("%ssup_fig_icer_plot1_%s_time-horizon.png",path.fig,t_horizon)
+ggsave(tarfile, plot.icers1, width = 7.5, height = 6, units = "in")
+
+
+plt.icers2 <- function(meas = "icer_md", 
+                       lbl = "ICER ($)",
+                       nat_imm_dur_days.lbl = c('365'="Natural immunity\n1 year",'912'="2.5 years", '1825'="5 years", 'Inf'="Life-long" ),
+                       strategy_str.lbl = c('3650'="10 year campaign",'365'="1 year campaign", '1825'="5 year campaign"),
+                       showX = TRUE, 
+                       t_horizon=10,
+                       #high = "#56B1F7"
+                       high = "#6656F7") ggplot(plots.dt[
+                           vac_price == 3 &
+                               perspective == "health_system" #&
+                               #nat_imm_dur_days !="Inf"
+                       ]) +
+    facet_grid(
+        strategy_str ~ nat_imm_dur_days,
+        labeller = labeller(
+            nat_imm_dur_days = nat_imm_dur_days.lbl,
+            strategy_str = strategy_str.lbl
+        )
+    ) +
+    aes(
+        anni_year, color = disc.dalys,
+        linetype = factor(daly_scenario),
+        group = interaction(disc.dalys, daly_scenario)
+    ) +
+    geom_line(aes(y=get(meas))) +
+    theme_minimal() +
+    theme(legend.position="top") +
+    theme(
+        panel.border=element_rect(colour = "black", fill=NA, size=0.5),
+        panel.grid.minor = element_blank()
+    ) +
+    scale_color_continuous(
+        "DALY discount rate",
+        labels = c("0%", "3%"),
+        breaks = c(0.00,0.03),
+        guide = "legend",
+        high = high
+    ) +
+    scale_linetype_discrete(
+        name = "Comorbidities",
+        labels = c("The same as the\ngeneral population", 
+                   "Higher than the \ngeneral population")
+    ) +
+    scale_x_continuous(
+        "Time-horizon (years)",
+        breaks = 0:10
+    ) +
+    scale_y_continuous(
+        sprintf("%s", lbl), labels = scales::label_number_si()
+    ) + 
+    coord_cartesian(ylim = c(-1000,5000),)
+
+plot.icers2 <- plt.icers2(t_horizon=t_horizon)
+
+tarfile <- sprintf("%ssup_fig_icer_plot2_%s_time-horizon.png",path.fig,t_horizon)
+ggsave(tarfile, plot.icers2, width = 7.5, height = 6, units = "in")
+
+# Scenarios table
+
+# Generate scenario analysis list. MUST be a better way to do this...
+scen.list <- list()
+
+to.add <- base.list
+to.add$scen_name = "Vaccine base case"
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "Target 15+ from outset"
+to.add$from_age = 4
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "5 year campaign"
+to.add$strategy_str = 1825
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "10 year campaign"
+to.add$strategy_str = 0
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "1 year vaccine & natural immunity waning"
+to.add$nat_imm_dur_days = 365
+to.add$vax_imm_dur_days = 365
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "5 year vaccine & 2.5 year natural immunity waning"
+to.add$vax_imm_dur_days = 1825
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "1 dose regimen (twice rate of people vaccinated)"
+#to.add$vax_delay = 0 
+to.add$doses_per_day = 8000
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "30% vaccine efficacy"
+to.add$vax_eff = 0.3
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "90% vaccine efficacy"
+to.add$vax_eff = 0.9
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "$10 price per dose"
+to.add$vac_price = 10
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "DALYs discounted at 3%"
+to.add$disc.dalys = 0.03
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "DALYs based on higher comorbidities"
+to.add$daly_scenario = "low"
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "Societal perspective"
+to.add$perspective = "societal"
+scen.list <- rbindlist(list(scen.list, to.add))
+
+
+n <- names(scen.list)[-1] # name of fields to join on
+scen.dt <-as.data.table(scen.list)
+scen.dt <- econ.dt[as.data.table(scen.list),on=n][anni_year==t_horizon]
+scen.dt[,scen_id:=.I]
+
+# summary of 10 year costs and dalys averted
+scen.tab <- scen.dt[,.("Scenario No."=scen_id,"Description"=scen_name,
+                       "Difference in Cost ($ millions)" = sprintf(
+                           "%.3f (%.3f, %.3f)",
+                           ccosts_md/10^6,ccosts_lo95/10^6,ccosts_hi95/10^6
+                           ),
+                       "DALYs Averted (thousands)" = sprintf(
+                           "%.3f (%.3f, %.3f)",
+                           cdalys_md/10^3,cdalys_lo95/10^3,cdalys_hi95/10^3
+                       ),
+                       "$ per DALY Averted" = sprintf(
+                           "%.3f (%.3f, %.3f)",
+                           icer_md,icer_lo95,icer_hi95
+                       ),
+                       id,econ_id)]
+
+
+
+# add in cases and deaths averted
+ids <- unique(scen.tab[,id])
+scen.tab <- scen.tab[
+    epi.dt[id %in% ids & anni_year<=t_horizon,
+           .("Cases Averted (millions)" = sprintf(
+                 "%.3f (%.3f, %.3f)",
+                 sum(cases.del_md)/10^6,sum(cases.del_lo95)/10^6,sum(cases.del_hi95)/10^6
+             ),
+             "Deaths Averted (thousands)" = sprintf(
+                 "%.3f (%.3f, %.3f)",
+                 sum(death_o.del_md)/10^3,sum(death_o.del_lo95)/10^3,sum(death_o.del_hi95)/10^3
+             )
+            ), 
+           by=id
+    ],
+    on="id"
+]
+scen.tab[,id:=NULL]
+scen.tab[,econ_id:=NULL]
+
+write.csv(scen.tab[order(`Scenario No.`)],
+          sprintf("%sscenario_table_%s_time-horizon.csv",path.fig,t_horizon)
+          )
+
+
+# 
+# plt.icers <- function(meas = "icer_md", 
+#                       lbl = "ICER ($)",
+#                       showX = TRUE, 
+#                       #high = "#56B1F7"
+#                       high = "#FFA7A8",
+#                       mid = "#BA585C",
+#                       low = "#000000") ggplot(scen.dt) +
+#     aes(
+#         anni_year, color=scen_name
+#     ) +
+#     geom_line(aes(y=get(meas))) +
+#     theme_minimal() +
+#     theme(legend.position="top") +
+#     theme(
+#         panel.border=element_rect(colour = "black", fill=NA, size=0.5),
+#         panel.grid.minor = element_blank()
+#     ) +
+#     scale_y_continuous(
+#         sprintf("%s", lbl), labels = scales::label_number_si()
+#     )
+
 
