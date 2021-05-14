@@ -26,21 +26,23 @@ CMPTH := covidm
 CMURL := git@github.com:nicholasdavies/covidm.git
 
 ${CMPTH}:
-	cd $(dir $@); git clone ${CMURL} $(notdir $@)
+	cd $(dir $@); git clone --single-branch --branch ngmupdate ${CMURL} $(notdir $@)
 
 DATAPTH ?= .
 FITS := fit_sindh.qs $(shell cd ${DATAPTH}; ls fit_sindh_waning_*.qs)
 DFITS := fitd_sindh.qs $(shell cd ${DATAPTH}; ls fitd_sindh_waning_*.qs)
 DATASRC := $(addprefix ${DATAPTH}/,fitd_combined.qs epi_data.csv mob_data.csv)
 
-cm: ${CMPATH}
+cm: ${CMPTH}
+
+# warning: this will misbehave on HPC if run in parallel
+# needs to be executed prior to the parallel work
+setup: setup.R $(firstword ${DFITS}) | ${IDIR} ${ODIR} ${FDIR}
+	Rscript $^ ${CMPTH}
 
 # TODO add params.json
 ${CONFDB}: build_db.R $(firstword ${DFITS}) | ${CMPTH} ${IDIR}
 	${Rpipe}
-
-setup: setup.R $(firstword ${DFITS}) | ${IDIR} ${ODIR} ${FDIR}
-	Rscript $^ ${CMPTH}
 
 db: ${CONFDB} ${IDIR}/scenarios.csv
 
