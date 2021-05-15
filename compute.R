@@ -2,14 +2,13 @@
 suppressPackageStartupMessages({
     require(data.table)
     require(qs)
-    require(RSQLite)
 })
 
-.debug <- "1537"
+.debug <- c("~/Dropbox/Covid-WHO-vax", "1537")
 .args <- if (interactive()) sprintf(c(
     "fitd_combined.qs", "epi_data.csv", "mob_data.csv",
-    "inputs/config.sqlite", "%s", "../covidm-vaxco", "outputs/%s.rds"
-), .debug) else commandArgs(trailingOnly = TRUE)
+    "%s/inputs/config.rds", .debug[2], "covidm", "%s/outputs/%s.rds"
+), .debug[1], .debug[2]) else commandArgs(trailingOnly = TRUE)
 
 # load epi & mobility data
 epi = fread(.args[2])
@@ -25,15 +24,12 @@ outfile <- tail(.args, 1)
 # Scenario parameters
 # TODO what this does not cover yet: any vaccines being disbursed
 # (how many doses to which age groups, when)
-drv <- RSQLite::SQLite()
-conn <- dbConnect(drv, scndb)
-scen.dt <- as.list(data.table(dbReadTable(conn, "scenario"))[id == scnid])
-scen.dt$n_samples <- dbGetQuery(conn, "SELECT max(particleId) FROM parameter;")[,1]
+scen.dt <- as.list(readRDS(scndb)[id == scnid])
+scen.dt$n_samples <- 100
 #' @example 
 #' scen.dt$n_samples <- 5
 #' TODO pull from pars table?
 #' also, need to set selections from covidm sampling
-dbDisconnect(conn)
 
 natwaning_key <- sprintf("%.1f", scen.dt$nat_imm_dur_days/365)
 
@@ -67,8 +63,26 @@ fitS$par$pop[[1]]$wn = mk_waning(scen.dt$nat_imm_dur_days)
 
 if (scen.dt$strategy == "campaign") {
     # set parameters for this set of scenario runs
+
+  if (scen.dt$eff_mech == "allnothing") {
     fitS$par$pop[[1]]$ev = rep(scen.dt$vax_eff, 16) #' TODO mods by age?
-    fitS$par$pop[[1]]$wv = mk_waning(scen.dt$vax_imm_dur_days)
+    if (scen.dt$vax_mech == "infection") {
+      fitS$par$pop[[1]]$uv = fitS$par$pop[[1]]$u*rep(1-scen.dt$vax_eff, 16) #' TODO mods by age?
+    } else { # against disease
+      fitS$par$pop[[1]]$yv = fitS$par$pop[[1]]$y*rep(1-scen.dt$vax_eff, 16)
+    }
+  } else {
+    fitS$par$pop[[1]]$ev = rep(1, 16)
+    if (scen.dt$vax_mech == "infection") {
+      fitS$par$pop[[1]]$uv = rep(0, 16)
+    } else { # against disease
+      fitS$par$pop[[1]]$yv = rep(0, 16)
+    }
+  }
+  
+
+    
+  fitS$par$pop[[1]]$wv = mk_waning(scen.dt$vax_imm_dur_days)
     
     doses_per_day <- rep(0, 16)
     tar_ages <- scen.dt$from_age:scen.dt$to_age

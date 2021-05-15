@@ -16,8 +16,7 @@ Rstarp = Rscript $^ $* $| $@
 METPAT ?= ${ODIR}/metrics_
 OTHPAT ?= ${ODIR}/other_
 
-CONFDB ?= ${ODIR}/config.sqlite
-CONFEXT ?= ${ODIR}/config_ext.sqlite
+CONFDB ?= ${ODIR}/config.rds
 DBPAT := ${METPAT}%.sqlite
 ODBPAT := ${OTHPAT}%.sqlite
 
