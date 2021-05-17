@@ -43,6 +43,8 @@ cm_force_shared = T;
 cm_version = 2;
 source(file.path(cm_path, "R", "covidm.R"))
 
+fitS$par <- cm_check_parameters(cm_translate_parameters(fitS$par))
+
 date_vax <- as.Date(scen.dt$start_timing, origin = "1970-01-01")
 t_vax <- as.numeric(date_vax - as.Date(fitS$par$date0))
 #' first 3 years + vax anniversaries
@@ -84,17 +86,20 @@ if (scen.dt$strategy == "campaign") {
     
   fitS$par$pop[[1]]$wv = mk_waning(scen.dt$vax_imm_dur_days)
     
-    doses_per_day <- rep(0, 16)
-    tar_ages <- scen.dt$from_age:scen.dt$to_age
-    vp <- fitS$par$pop[[1]]$size[tar_ages]; vp <- vp/sum(vp)
-    #' TODO potentially make demographic sensitive?
-    doses_per_day[tar_ages] <- floor(vp*scen.dt$doses_per_day)
-    del <- scen.dt$doses_per_day - sum(doses_per_day)
-    if (del) {
-        del_tar <- scen.dt$from_age:(scen.dt$from_age+del-1)
-        doses_per_day[del_tar] <- doses_per_day[del_tar] + 1
-    }
-    
+  doses_per_day <- rep(0, 16)
+  tar_ages <- scen.dt$from_age:scen.dt$to_age
+  #' demographic proportions for target ages
+  vp <- fitS$par$pop[[1]]$size[tar_ages];
+  vp <- vp/sum(vp)
+  doses_per_day[tar_ages] <- floor(vp*scen.dt$doses_per_day)
+  del <- scen.dt$doses_per_day - sum(doses_per_day)
+  if (del) {
+      del_tar <- scen.dt$from_age:(scen.dt$from_age+del-1)
+      doses_per_day[del_tar] <- doses_per_day[del_tar] + 1
+  }
+  
+  #' if from_age != 4 (i.e., not doing whole population initially)
+   
     doses_per_day_later <- rep(0, 16)
     tar_ages <- 4:scen.dt$to_age
     vp <- fitS$par$pop[[1]]$size[tar_ages]; vp <- vp/sum(vp)
@@ -107,25 +112,56 @@ if (scen.dt$strategy == "campaign") {
     }
     
     t_end <- ifelse(scen.dt$strategy_str == 0, fitS$par$time1, t_vax+scen.dt$strategy_str)
+
+    #' for this particular population, at the lowest dose rate, it takes
+    #' two quarters to get to high coverage; otherwise,
+    #' after the expansion of doses per day in second Q, they will be
+    #' covered during that period. Rather than select an exact day, for that change
+    #' we assume coverage targetting switches with increased availability.
+    #' 
+    #' The other time to consider changing targets is for continuous dosages
     
-    covaxIncreaseMult <- c(4, 6, 8)
-    covaxIncreaseDays <- t_vax + seq(91, by=91, length.out = length(covaxIncreaseMult))
-    
-    dpd <- lapply(
-      1:(length(covaxIncreaseMult)+2),
-      function (i) c(1, covaxIncreaseMult, 0)[i]*(if (i==1) doses_per_day else doses_per_day_later)
-    )
-    
-    ### NEW BIT IS HERE
-    fitS$par$schedule[[2]] = list(   # schedule[[2]] because schedule[[1]] is already occupied
+    if (scen.dt$increasing) {
+      covaxIncreaseMult <- c(4, 6, 8)
+      covaxIncreaseDays <- t_vax + seq(91, by=91, length.out = length(covaxIncreaseMult))
+      
+      dpd <- lapply(
+        1:(length(covaxIncreaseMult)+2),
+        function (i) c(1, covaxIncreaseMult, 0)[i]*(if (i==1 | (i == 2 & scen.dt$doses_per_day == 4000)) doses_per_day else doses_per_day_later)
+      )
+      
+      ### NEW BIT IS HERE
+      fitS$par$schedule[[2]] = list(   # schedule[[2]] because schedule[[1]] is already occupied
         parameter = 'v',             # impact parameter 'v' (vaccines administered per day for each age group)
         pops = 0,                    # 0th population
         mode = 'assign',             # assign values to v
         times =     c(t_vax, covaxIncreaseDays, t_end) + scen.dt$vax_delay,    # do changes on vax day, vax day + 90
         values = dpd
         # however many doses a day for strategy_str days, then stop
-    )
-    
+      )
+    } else {
+      dpd <- list(
+        doses_per_day, rep(0, length(doses_per_day))
+      )
+      tms <- c(t_vax, t_end) + scen.dt$vax_delay
+      if (scen.dt$from_age != 4) { #' if ! already targetting everybody
+        tswap <- floor((sum(fitS$par$pop[[1]]$size[tar_ages])*.75/scen.dt$doses_per_day)/30)*30
+        if (t_vax+tswap < t_end) {
+          dpd <- list(
+            doses_per_day, doses_per_day_later, rep(0, length(doses_per_day))
+          )
+          tms <- c(t_vax, t_vax+tswap, t_end) + scen.dt$vax_delay
+        }
+      }
+      fitS$par$schedule[[2]] = list(   # schedule[[2]] because schedule[[1]] is already occupied
+        parameter = 'v',             # impact parameter 'v' (vaccines administered per day for each age group)
+        pops = 0,                    # 0th population
+        mode = 'assign',             # assign values to v
+        times =     tms,    # do changes on vax day, vax day + 90
+        values = dpd
+        # however many doses a day for strategy_str days, then stop
+      )
+    }
 }
 
 #' TODO check coding?
