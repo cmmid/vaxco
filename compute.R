@@ -43,10 +43,10 @@ cm_force_shared = T;
 cm_version = 2;
 source(file.path(cm_path, "R", "covidm.R"))
 
-fitS$par <- cm_check_parameters(cm_translate_parameters(fitS$par))
-
 date_vax <- as.Date(scen.dt$start_timing, origin = "1970-01-01")
 t_vax <- as.numeric(date_vax - as.Date(fitS$par$date0))
+fitS$par <- cm_check_parameters(cm_translate_parameters(fitS$par))
+
 #' first 3 years + vax anniversaries
 # validation_times <- seq(7, 365*3, by=7)
 anni_times <- seq(t_vax, by=365, length.out = scen.dt$horizon+1) #' horizon years + 1
