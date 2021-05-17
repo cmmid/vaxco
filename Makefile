@@ -83,8 +83,6 @@ ${ODIR}/econ_quantile.rds: econ_quantile.R ${ODIR}/epi_quantile.rds ${ECONDATA} 
 
 testscn: $(patsubst %,${ODIR}/%.rds,0001 0002 0003 0004 0005 3076 3077 3078 3079 3080)
 
-merge: ${ODIR}/all_metrics.sqlite
-
 ${IDIR}/scenarios.csv: ${CONFDB}
 	sqlite3 -header -csv $< "SELECT * FROM scenario;" > $@
 
