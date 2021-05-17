@@ -54,11 +54,6 @@ ${DATAPTH}/fit_combined.qs: merge_fits.R ${FITS}
 ${DATAPTH}/fitd_combined.qs: merge_fits.R ${DFITS}
 	${R}
 
-${ODIR}/sim_model.rds: sim_model_fit.R ${DATAPTH}/fitd_combined.qs sindh_data.csv | ${CMPTH}
-	Rscript $^ $| $@
-
-smodel: ${ODIR}/sim_model.rds
-
 ${ODIR}/sim/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH} ${ODIR}/sim
 	Rscript $^ $* $(word 1,$|) $@
 
@@ -129,3 +124,8 @@ ${FDIR}/icer.png: fig_icer.R ${IDIR}/config_high.sqlite ${ODIR}/icer.rds
 	${R}
 
 figs: ${FDIR}/incremental.png ${FDIR}/validation.png
+
+${ODIR}/sim_model.rds: sim_model_fit.R ${DATAPTH}/fitd_combined.qs sindh_data.csv | ${CMPTH}
+	Rscript $^ $| $@
+
+smodel: ${ODIR}/sim_model.rds

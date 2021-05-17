@@ -3,15 +3,15 @@ suppressPackageStartupMessages({
     require(RSQLite)
 })
 
-.debug <- c("~/Dropbox/Covid-WHO-vax/outputs", "baseline")
+.debug <- c("~/Dropbox/Covid-WHO-vax", "baseline")
 #.debug <- c("~/Dropbox/Covid-WHO-vax/outputs", "0001")
 .args <- if (interactive()) sprintf(c(
     "covid_other_costs.csv",
     "covid_vac_costs_per_dose.csv",
     "daly_scenarios.csv",
-    "%s/config.sqlite",
-    ifelse(.debug[2]=="baseline","%s/sim","%s/sim/%s.rds"), # for the baseline, will combine several
-    "%s/econ/%s.rds"
+    "%s/inputs/config.rds",
+    ifelse(.debug[2]=="baseline","%s/outputs/sim","%s/outputs/sim/%s.rds"), # for the baseline, will combine several
+    "%s/outputs/econ/%s.rds"
 ),.debug[1], .debug[2]) else commandArgs(trailingOnly = TRUE)
 
 
@@ -19,17 +19,10 @@ suppressPackageStartupMessages({
 
 isbaseline <- grepl("baseline.rds$", tail(.args, 1))
 
-readDBtable <- function(fl, tbl = "scenario", drv = RSQLite::SQLite(), flags = SQLITE_RO) {
-    conn <- dbConnect(drv, fl, flags = flags)
-    res <- data.table(dbReadTable(conn, tbl))
-    dbDisconnect(conn)
-    res
-}
-
 scn <- if (isbaseline) {
-    readDBtable(.args[4])[strategy == "none"]
+    readRDS(.args[4])[strategy == "none"]
 } else {
-    readDBtable(.args[4])[id == as.integer(gsub("(\\d+)\\.rds$","\\1",basename(tail(.args, 1))))]
+    readRDS(.args[4])[id == as.integer(gsub("(\\d+)\\.rds$","\\1",basename(tail(.args, 1))))]
 }
 
 epi.fls <- if (isbaseline) {
@@ -47,10 +40,13 @@ rm(dt)
 
 #' SETUP ECON DATA
 
-#' vector of doses 
-doses_yr_1 <- sum(c(1,4,6,8))*365/4 # year 1
-doses_routine <- 8*365
-doses_per_anniversary <- c(doses_yr_1, rep(doses_routine, 9)) 
+#' vector of doses
+
+increasing <- !is.na(scn$increasing[1]) & scn$increasing[1]
+doses_yr_1 <- (if(increasing) { sum(c(1,4,6,8))/4 } else { 1 })*365  # year 1
+doses_routine <- (if(increasing) { 8 } else { 1 })*365 
+doses_per_anniversary <- c(doses_yr_1, rep(doses_routine, 9))
+
 # by perspective
 othercosts <- dcast(fread(.args[1]), perspective ~ name, value.var = "cost")
 
