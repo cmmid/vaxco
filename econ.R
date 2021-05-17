@@ -1,6 +1,5 @@
 suppressPackageStartupMessages({
     require(data.table)
-    require(RSQLite)
 })
 
 .debug <- c("~/Dropbox/Covid-WHO-vax", "baseline")
