@@ -7,7 +7,7 @@ suppressPackageStartupMessages({
 .debug <- c("~/Dropbox/Covid-WHO-vax", "1537")
 .args <- if (interactive()) sprintf(c(
     "fitd_combined.qs", "epi_data.csv", "mob_data.csv",
-    "%s/inputs/config.rds", .debug[2], "covidm", "%s/outputs/%s.rds"
+    "%s/inputs/config.rds", .debug[2], "covidm", "%s/outputs/sim/%s.rds"
 ), .debug[1], .debug[2]) else commandArgs(trailingOnly = TRUE)
 
 # load epi & mobility data
@@ -200,10 +200,11 @@ all_runs = rbindlist(lapply(1:scen.dt$n_samples, function (n) {
 
 #' @examples 
 #' require(ggplot2)
-#' plot.dt <- melt(runs[[5]], id.vars = c("run","t","population","group"))
-#' p <- ggplot(plot.dt) + aes(t, value, color=group, group=group) +
-#'   geom_line(data=function(dt) dt[variable == "cases"]) + theme_minimal() +
-#'   coord_cartesian(xlim = c(0, 356)) + geom_vline(xintercept = t_vax)
+#' p <- ggplot(runs[age == 9]) + aes(anni_year, value, group = sampleId) +
+#'   facet_grid(age ~ ., scales = "free_y") +
+#'   geom_line(
+#'     data=function(dt) dt[outcome == "cases"], alpha = 0.05
+#'   ) + theme_minimal()
 
 long.dt <- melt.data.table(
   all_runs, id.vars = c("sampleId","age","t"), variable.name = "outcome"
