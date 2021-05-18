@@ -69,9 +69,14 @@ ${ODIR}/epiq/%.rds: epi_quantile.R ${ODIR}/sim/%.rds ${CONFDB} ${ODIR}/epi_basel
 
 testqs: $(patsubst %,${ODIR}/epiq/%.rds,00001 00002 00003 00004 00005 00006 00007 00008 18433 18434 18435 18436 18437 18438 18439 18440)
 
-${ODIR}/epi_quantile.rds: epi_qmerge.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/epiq/*.rds)) | ${ODIR}/epiq
+${ODIR}/epi_quantile.rds: qmerge.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/epiq/*.rds)) | ${ODIR}/epiq
 	Rscript $< $| $@
 
+${ODIR}/econ_baseline.rds: econ_baseline.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/sim/*.rds)) | ${ODIR}/sim ${CONFDB}
+	Rscript $< $| $@
+
+${ODIR}/econq/%.rds: econ_quantile.R ${ODIR}/sim/%.rds ${CONFDB} ${ODIR}/epi_baseline.rds
+	Rscript $^ $* $@
 
 ${ODIR}/econ_quantile.rds: econ_quantile.R ${ODIR}/epi_quantile.rds ${ECONDATA} ${CONFDB}
 	${R}
