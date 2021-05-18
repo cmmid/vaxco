@@ -25,7 +25,7 @@ scn <- if (isbaseline) {
 }
 
 epi.fls <- if (isbaseline) {
-    scns <- scn[, sprintf("(%s)", paste(sprintf("%04i",id), collapse = "|")) ]
+    scns <- scn[, sprintf("(%s)", paste(sprintf("%05i",id), collapse = "|")) ]
     list.files(tail(.args, 2)[1], scns, full.names = TRUE)
 } else tail(.args, 2)[1]
 

@@ -72,21 +72,28 @@ testqs: $(patsubst %,${ODIR}/epiq/%.rds,00001 00002 00003 00004 00005 00006 0000
 ${ODIR}/epi_quantile.rds: qmerge.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/epiq/*.rds)) | ${ODIR}/epiq
 	Rscript $< $| $@
 
-${ODIR}/econ_baseline.rds: econ_baseline.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/sim/*.rds)) | ${ODIR}/sim ${CONFDB}
-	Rscript $< $| $@
+ECONDATA := covid_other_costs.csv covid_vac_costs_per_dose.csv daly_scenarios.csv
 
-${ODIR}/econq/%.rds: econ_quantile.R ${ODIR}/sim/%.rds ${CONFDB} ${ODIR}/epi_baseline.rds
-	Rscript $^ $* $@
+# compute the econ scenarios for each epi scenario - these are quantiles
+${ODIR}/econ/%.rds: econ.R ${ECONDATA} ${CONFDB} ${ODIR}/sim/%.rds | ${ODIR}/econ/baseline.rds
+	Rscript $^ $@
 
-${ODIR}/econ_quantile.rds: econ_quantile.R ${ODIR}/epi_quantile.rds ${ECONDATA} ${CONFDB}
-	${R}
+# compute all the baseline scenarios - full series, unquantiled
+${ODIR}/econ/baseline.rds: econ.R ${ECONDATA} ${CONFDB} | ${ODIR}/econ
+	Rscript $^ ${ODIR}/sim $@
 
-testscn: $(patsubst %,${ODIR}/%.rds,0001 0002 0003 0004 0005 3076 3077 3078 3079 3080)
+ebaseline: ${ODIR}/econ/baseline.rds
+eone: $(patsubst %,${ODIR}/econ/%.rds,00001)
+eall: $(patsubst %,${ODIR}/econ/%.rds,$(shell seq -f%05g 1 20488))
+
+# merge the econ quantiled scenarios
+${ODIR}/econ/merge.rds: econ_merge.R | eall
+	Rscript $^ ${ODIR}/econ $@
 
 ${ODIR}/validation.rds: validation_set.R ${CONFDB} $(wildcard ${OTHPAT}*.sqlite)
 	Rscript $(wordlist 1,2,$^) ${OTHPAT} $@
 
-digest: ${ODIR}/epi_quantile.rds ${ODIR}/econ_quantile.rds ${ODIR}/validation.rds
+digest: ${ODIR}/epi_quantile.rds ${ODIR}/econ/merge.rds ${ODIR}/validation.rds
 
 ${FDIR}/incremental.png: fig_incremental.R ${IDIR}/scenarios.rds ${ODIR}/quantiles.rds ${ODIR}/baseline.rds
 	${R}
