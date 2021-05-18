@@ -11,3 +11,5 @@ fit_combined.qs
 data_fitting/.DS_Store
 data_fitting/*.qs
 data_fitting/*.rds
+covidm/model_v2/*.o
+covidm/build/*
