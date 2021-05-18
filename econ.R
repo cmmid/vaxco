@@ -161,7 +161,7 @@ ret.dt <- econscns.dt[,{
 if (!isbaseline) {
     #' join the relevant baseline
     this <- as.list(scn[,.(nat_imm_dur_days, start_timing)])
-    basescn <- readDBtable(.args[4])[strategy == "none" & nat_imm_dur_days == this$nat_imm_dur_days & start_timing == this$start_timing, id]
+    basescn <- readRDS(.args[4])[strategy == "none" & nat_imm_dur_days == this$nat_imm_dur_days & start_timing == this$start_timing, id]
     qtile <- function(
         v, ps = c(lo95=0.025, lo50=0.25, md=0.5, hi50=0.75, hi95=0.975),
         withMean = c("mn", NA),
