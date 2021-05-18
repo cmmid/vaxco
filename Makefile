@@ -61,7 +61,7 @@ testsim: ${ODIR}/sim/00001.rds
 
 ECONDATA := covid_other_costs.csv covid_vac_costs_per_dose.csv daly_scenarios.csv
 
-${ODIR}/epi_quantile.rds: epi_quantile.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/*.rds)) | ${ODIR} ${CONFDB}
+${ODIR}/epi_quantile.rds: epi_quantile.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/sim/*.rds)) | ${ODIR}/sim ${CONFDB}
 	Rscript $< $| $@
 
 ${ODIR}/econ_quantile.rds: econ_quantile.R ${ODIR}/epi_quantile.rds ${ECONDATA} ${CONFDB}
