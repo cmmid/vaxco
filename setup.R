@@ -40,6 +40,12 @@ fitS$user_defined$model_v2$cpp_observer <- c(
 ,"dyn.Obs(t, 0, 2, 0) = dyn(\"cases_reported\", t, {}, {}) * asc((t - P.time0) / (258 - P.time0), x[8], x[9], -x[10], x[11]);"
 )
 
+fitS$user_defined$model_v2$cpp_changes <- c(
+    'for (auto& u : P.pop[0].u) u *= x[1];',
+    'for (auto& u : P.pop[0].uv) u *= x[1];',
+    'P.pop[0].seed_times = vector<double>(10, (int)x[0]);'
+)
+
 #' TODO - this will misbehave on HPC - fix along with parameter checking
 # This will recompile covidm with certain components required to run 
 # for this setting and model setup -- this step may need to be done 
