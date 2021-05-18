@@ -65,20 +65,23 @@ fitS$par$pop[[1]]$wn = mk_waning(scen.dt$nat_imm_dur_days)
 
 if (scen.dt$strategy == "campaign") {
     # set parameters for this set of scenario runs
-
-  if (scen.dt$eff_mech == "allnothing") {
+  #'  - infection + allornothing (ve = efficacy, uv = 0)
+  #'  - infection + leaky (ve = 1, uv = u*(1-eff))
+  #'  - disease-only + allornothing (ve = efficacy, yv = 0)
+  #'  - disease-only + leaky (ve = 1, yv = y*(1-eff))
+  if (scen.dt$eff_mech == "allornothing") {
     fitS$par$pop[[1]]$ev = rep(scen.dt$vax_eff, 16) #' TODO mods by age?
-    if (scen.dt$vax_mech == "infection") {
-      fitS$par$pop[[1]]$uv = fitS$par$pop[[1]]$u*rep(1-scen.dt$vax_eff, 16) #' TODO mods by age?
-    } else { # against disease
-      fitS$par$pop[[1]]$yv = fitS$par$pop[[1]]$y*rep(1-scen.dt$vax_eff, 16)
-    }
-  } else {
-    fitS$par$pop[[1]]$ev = rep(1, 16)
     if (scen.dt$vax_mech == "infection") {
       fitS$par$pop[[1]]$uv = rep(0, 16)
     } else { # against disease
       fitS$par$pop[[1]]$yv = rep(0, 16)
+    }
+  } else {
+    fitS$par$pop[[1]]$ev = rep(1, 16)
+    if (scen.dt$vax_mech == "infection") {
+      fitS$par$pop[[1]]$uv = fitS$par$pop[[1]]$u*rep(1-scen.dt$vax_eff, 16) #' TODO mods by age?
+    } else { # against disease
+      fitS$par$pop[[1]]$yv = fitS$par$pop[[1]]$y*rep(1-scen.dt$vax_eff, 16)
     }
   }
   
