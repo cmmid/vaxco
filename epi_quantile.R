@@ -6,7 +6,7 @@ suppressPackageStartupMessages({
 
 .debug <- "~/Dropbox/Covid-WHO-vax/outputs"
 .args <- if (interactive()) sprintf(c(
-    "%s", "%s/config.rds", "%s/epi_quantile.rds"
+    "%s/sim", "%s/config.rds", "%s/epi_quantile.rds"
 ), .debug) else commandArgs(trailingOnly = TRUE)
 
 scn <- readRDS(.args[2])
