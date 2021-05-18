@@ -57,23 +57,9 @@ ${DATAPTH}/fitd_combined.qs: merge_fits.R ${DFITS}
 ${ODIR}/sim/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH} ${ODIR}/sim
 	Rscript $^ $* $(word 1,$|) $@
 
+testsim: ${ODIR}/sim/00001.rds
+
 ECONDATA := covid_other_costs.csv covid_vac_costs_per_dose.csv daly_scenarios.csv
-
-# compute the econ scenarios for each epi scenario - these are quantiles
-${ODIR}/econ/%.rds: econ.R ${ECONDATA} ${CONFDB} ${ODIR}/sim/%.rds | ${ODIR}/econ/baseline.rds
-	Rscript $^ $@
-
-# compute all the baseline scenarios - full series, unquantiled
-${ODIR}/econ/baseline.rds: econ.R ${ECONDATA} ${CONFDB} | ${ODIR}/econ
-	Rscript $^ ${ODIR}/sim $@
-
-ebaseline: ${ODIR}/econ/baseline.rds
-eone: $(patsubst %,${ODIR}/econ/%.rds,0001)
-eall: $(patsubst %,${ODIR}/econ/%.rds,$(shell seq -f%04g 1 4616))
-
-# merge the econ quantiled scenarios
-${ODIR}/econ/merge.rds: econ_merge.R | eall
-	Rscript $^ ${ODIR}/econ $@
 
 ${ODIR}/epi_quantile.rds: epi_quantile.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/*.rds)) | ${ODIR} ${CONFDB}
 	Rscript $< $| $@
@@ -83,34 +69,10 @@ ${ODIR}/econ_quantile.rds: econ_quantile.R ${ODIR}/epi_quantile.rds ${ECONDATA} 
 
 testscn: $(patsubst %,${ODIR}/%.rds,0001 0002 0003 0004 0005 3076 3077 3078 3079 3080)
 
-${IDIR}/scenarios.csv: ${CONFDB}
-	sqlite3 -header -csv $< "SELECT * FROM scenario;" > $@
-
-${ODIR}/diffs.rds: diffs.R ${CONFDB} $(wildcard ${METPAT}*.sqlite)
-	Rscript $(wordlist 1,2,$^) ${METPAT} $@
-
-${ODIR}/baseline.rds: baseline.R ${CONFDB} $(wildcard ${METPAT}*.sqlite)
-	Rscript $(wordlist 1,2,$^) ${METPAT} $@
-
-${ODIR}/quantiles.rds: quantiles.R ${ODIR}/diffs.rds
-	${R}
-
 ${ODIR}/validation.rds: validation_set.R ${CONFDB} $(wildcard ${OTHPAT}*.sqlite)
 	Rscript $(wordlist 1,2,$^) ${OTHPAT} $@
 
-${ODIR}/dalys.rds: econ_summaries.R \
-$(patsubst %,${IDIR}/%.csv,daly_scenarios covid_vac_cost_inputs covid_other_cost_inputs) \
-${IDIR}/config_high.sqlite $(wildcard ${METPAT}*.sqlite)
-	Rscript $(wordlist 1,5,$^) ${METPAT} ${ODIR}/dalys.rds ${ODIR}/icer.rds ${ODIR}/costs.rds
-
-${ODIR}/costs.rds ${ODIR}/costs_averted.rds ${ODIR}/dalys_averted.rds: ${ODIR}/dalys.rds
-
-econ: ${ODIR}/dalys.rds ${ODIR}/costs.rds
-
-${IDIR}/scenarios.rds: scenarios.R ${CONFDB}
-	${R}
-
-digest: ${ODIR}/diffs.rds ${ODIR}/baseline.rds ${ODIR}/quantiles.rds ${IDIR}/scenarios.rds ${ODIR}/validation.rds
+digest: ${ODIR}/epi_quantile.rds ${ODIR}/econ_quantile.rds ${ODIR}/validation.rds
 
 ${FDIR}/incremental.png: fig_incremental.R ${IDIR}/scenarios.rds ${ODIR}/quantiles.rds ${ODIR}/baseline.rds
 	${R}
