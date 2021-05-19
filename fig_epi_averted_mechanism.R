@@ -10,7 +10,7 @@ suppressPackageStartupMessages({
 .args <- if (interactive()) sprintf(c(
     "%s/outputs/epi_quantile.rds",
     "%s/inputs/config.rds",
-    "%s/figures/averted_%s.png"
+    "%s/figures/mech_averted_%s.png"
 ), .debug[1], .debug[2])
 
 dosetar <- as.integer(gsub("^.+_(\\d+)\\.(png|pdf)$","\\1",tail(.args, 1)))
@@ -43,17 +43,12 @@ fig2.dt <- dcast(melt(full.dt[
     strategy != "none" & start_timing == 18718 &
     doses_per_day == dosetar & vax_delay == 30 &
     vax_eff == 0.7 & nat_imm_dur_days == round(2.5*365) &
-    strategy_str == 365 &
-    vax_mech == "infection" & eff_mech == "allornothing"
+    vax_imm_dur_days == round(2.5*365) &
+    strategy_str == 365
 ],
-    id.vars = c("id", "qtile", "anni_year", "vax_imm_dur_days", "from_age"),
+    id.vars = c("id", "qtile", "anni_year", "vax_mech", "eff_mech", "from_age"),
     measure.vars = c("ccases.av","cdeaths.av")
-), id + anni_year + vax_imm_dur_days + from_age + variable ~ qtile)[,
-    vdur := factor(fifelse(
-        is.infinite(vax_imm_dur_days), "Life-long",
-        sprintf("%0.2g year%s", vax_imm_dur_days/365, fifelse(vax_imm_dur_days/365==1,"","s"))
-    ), levels = c(sprintf("%0.2g year%s", c(1,2.5,5), c("","s","s")), "Life-long"), ordered = TRUE)
-]
+), id + anni_year + vax_mech + eff_mech + from_age + variable ~ qtile)
 
 #fig2.dt[, measure := factor(variable, levels = c("ccases.av","cdeaths.av"), ordered = TRUE)]
 
@@ -61,9 +56,10 @@ refdate <- as.Date("2020-04-01")
 
 fig2.p <- ggplot(fig2.dt) + aes(
     refdate + anni_year*365,
-    color = as.integer(vdur),
-    fill = as.integer(vdur),
-    group = vdur
+    color = vax_mech,
+    fill = vax_mech,
+    linetype = eff_mech,
+    group = interaction(vax_mech, eff_mech)
 ) + facet_grid(
     variable ~ from_age, scales = "free_y",
     labeller = labeller(
@@ -74,10 +70,14 @@ fig2.p <- ggplot(fig2.dt) + aes(
     geom_ribbon(aes(ymin = lo95, ymax = hi95, color = NULL), alpha = 0.2, show.legend = FALSE) +
     geom_ribbon(aes(ymin = lo50, ymax = hi50, color = NULL), alpha = 0.35, show.legend = FALSE) +
     geom_line(aes(y=md)) +
-    scale_color_continuous(
-        "Vaccine Protection Expected Duration",
-        labels = levels(fig2.dt$vdur),
+    scale_color_discrete(
+        "Vaccine Against...",
+        labels = c(infection = "Infection", disease="Disease"),
         guide = "legend", aesthetics = c("color","fill")
+    ) +
+    scale_linetype_discrete(
+        "Efficacy Mechanism",
+        labels = c(allornothing = "All-or-Nothing", leaky="Leaky")
     ) +
     scale_x_date(
         "Calendar Year",
