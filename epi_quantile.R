@@ -1,74 +1,54 @@
 
 suppressPackageStartupMessages({
     require(data.table)
-    require(RSQLite)
 })
 
-.debug <- "~/Dropbox/Covid-WHO-vax/outputs"
+.debug <- c("~/Dropbox/Covid-WHO-vax/outputs", "00001")
 .args <- if (interactive()) sprintf(c(
-    "%s", "%s/config.sqlite", "%s/epi_quantile.rds"
-), .debug) else commandArgs(trailingOnly = TRUE)
+    "%s/sim/%s.rds", "%s/config.rds", "%s/epi_baseline.rds", .debug[2], "%s/epiq/%s.rds"
+), .debug[1], .debug[2]) else commandArgs(trailingOnly = TRUE)
 
-readDBtable <- function(fl, tbl = "metrics", drv = RSQLite::SQLite(), flags = SQLITE_RO) {
-    conn <- dbConnect(drv, fl, flags = flags)
-    res <- data.table(dbReadTable(conn, tbl))
-    dbDisconnect(conn)
-    res
-}
-
-scn <- readDBtable(.args[2], tbl = "scenario")
-
-file.dt <- data.table(
-    path = list.files(.args[1], "^\\d+\\.rds$", full.names = TRUE)
-)[,
-  id := as.integer(gsub("^.*/([^/]+)\\.rds$","\\1", path))
-][scn, on=.(id=id)][!is.na(path)]
-
+scn <- readRDS(.args[2])
 intcols <- names(scn)
-basecols <- setdiff(intcols, c("vax_mech","eff_mech","vax_eff","vax_imm_dur_days","vax_delay","repeat_period","repeat_number","doses_per_day","strategy_str","from_age","to_age", "strategy"))
+basecols <- setdiff(intcols, c("vax_mech","eff_mech","vax_eff","vax_imm_dur_days","vax_delay","repeat_period","repeat_number","doses_per_day","strategy_str","from_age","to_age", "strategy", "increasing"))
 
-merge.dt <- function(fl.dt, filt, cols) {
-    res <- rbindlist(with(
-        fl.dt,
-        mapply(function(p,id) readRDS(p)[eval(filt)][, id := id ], p=path, id=id, SIMPLIFY = FALSE)
-    ))
-    res[fl.dt[, .SD, .SDcols = cols], on = .(id)]
+ref.dt <- readRDS(.args[3])
+
+tarid <- as.integer(tail(.args, 2)[1])
+
+qtile <- function(
+  v, ps = c(lo95=0.025, lo50=0.25, md=0.5, hi50=0.75, hi95=0.975),
+  withMean = c("mn", NA),
+  fmt = "%s",
+  na.rm = TRUE
+) {
+  qs <- quantile(v, probs = ps, na.rm = na.rm)
+  names(qs) <- sprintf(fmt, names(ps))
+  if (!is.na(withMean[1])) {
+    mn <- mean(v)
+    names(mn) <- sprintf(fmt, withMean[1])
+    qs <- c(qs, mn)
+  }
+  as.list(qs)
 }
 
-flt <- expression(!(outcome %in% c("cases_reported","foi","obs0","non_icu_critical2_p","non_icu_critical2_i")))
-int.dt <- merge.dt(file.dt[strategy != "none"], flt, intcols)
-ref.dt <- merge.dt(file.dt[strategy == "none"], flt, basecols)
-
-int.dt[ref.dt[, -"id" ], del := i.value - value, on=setdiff(names(ref.dt), c("value", "id"))]
-
-res.dt <- rbind(
-    int.dt[,.(id, sampleId, age, outcome, anni_year, value, del)],
-    ref.dt[,.(id, sampleId, age, outcome, anni_year, value, del=NA)]
-)
+if (ref.dt[, !any(id == tarid)]) {
+  tar.dt <- scn[,.SD,.SDcols=intcols][
+    readRDS(.args[1])[, id := as.integer(tail(.args, 2)[1]) ], on = .(id)
+  ][
+    ref.dt[,-"id"], del := i.value - value, on=setdiff(names(ref.dt), c("value", "id"))
+  ][,.(id, sampleId, age, outcome, anni_year, value, del)]
+} else {
+  tar.dt <- ref.dt[id == tarid, .(id, sampleId, age, outcome, anni_year, value, del = NA) ]
+}
 
 #' we want outcomes-wide, quantiles+other keys long, and
 #' incidence values instead of cumulative values
 #'
 #' first get the quantiles
 
-qtile <- function(
-    v, ps = c(lo95=0.025, lo50=0.25, md=0.5, hi50=0.75, hi95=0.975),
-    withMean = c("mn", NA),
-    fmt = "%s",
-    na.rm = TRUE
-) {
-    qs <- quantile(v, probs = ps, na.rm = na.rm)
-    names(qs) <- sprintf(fmt, names(ps))
-    if (!is.na(withMean[1])) {
-        mn <- mean(v)
-        names(mn) <- sprintf(fmt, withMean[1])
-        qs <- c(qs, mn)
-    }
-    as.list(qs)
-}
-
-qs.del.dt <- res.dt[, qtile(del), by=.(id, outcome, age, anni_year)]
-qs.val.dt <- res.dt[, qtile(value), by=.(id, outcome, age, anni_year)]
+qs.del.dt <- tar.dt[, qtile(del), by=.(id, outcome, age, anni_year)]
+qs.val.dt <- tar.dt[, qtile(value), by=.(id, outcome, age, anni_year)]
 
 reshaper <- function(dt) dcast(
     melt(dt, id.vars = c("id","outcome","age","anni_year"), variable.name = "qtile"),

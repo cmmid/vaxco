@@ -1,30 +1,22 @@
 
 suppressPackageStartupMessages({
     require(data.table)
-    require(RSQLite)
 })
 
-.debug <- "~/Dropbox/Covid-WHO-vax/outputs"
+.debug <- "~/Dropbox/Covid-WHO-vax"
 .args <- if (interactive()) sprintf(c(
-    "%s/epi_quantile.rds",
+    "%s/outputs/epi_quantile.rds",
     "covid_other_costs.csv",
     "covid_vac_costs_per_dose.csv",
     "daly_scenarios.csv",
-    "%s/config.sqlite",
-    "%s/econ_quantile.rds"
+    "%s/inputs/config.rds",
+    "%s/outputs/econ_quantile.rds"
 ),.debug) else commandArgs(trailingOnly = TRUE)
-
-readDBtable <- function(fl, tbl = "metrics", drv = RSQLite::SQLite(), flags = SQLITE_RO) {
-    conn <- dbConnect(drv, fl, flags = flags)
-    res <- data.table(dbReadTable(conn, tbl))
-    dbDisconnect(conn)
-    res
-}
 
 dbs <- list.files(dirname(.args[5]), basename(.args[5]), full.names = TRUE)
 
 epi_scn <- rbindlist(lapply(
-  dbs, function(db) readDBtable(db, tbl = "scenario")[, .(id, vax_delay, strategy_str, doses_per_day)])
+  dbs, function(db) readRDS(db)[, .(id, vax_delay, strategy_str, doses_per_day)])
 )
 
 qs <- list.files(dirname(.args[1]), basename(.args[1]), full.names = TRUE)
@@ -35,6 +27,8 @@ epi_qs.dt <- rbindlist(lapply(qs, readRDS))[epi_scn, on=.(id)][!is.na(qtile)]
 doses_yr_1 <- sum(c(1,4,6,8))*365/4 # year 1
 doses_routine <- 8*365
 doses_per_anniversary <- c(doses_yr_1, rep(doses_routine, 9)) 
+
+doses_fixed <- 365
 
 # year > 1 
 
@@ -106,7 +100,7 @@ econ_digestor <- function(epi.dt, dalys.dt, econ_pars){
       costs := with(econ_pars, costs + fifelse(
           is.na(vax_delay),
           0,
-          doses_per_day*doses_per_anniversary[anni_year]/age_cats *
+          doses_per_day*(fifelse(increasing,doses_per_anniversary[anni_year],doses_fixed))/age_cats *
               ((strategy_str == 0) | (anni_year <= (strategy_str/365))) *
               cost_vac_dose * fifelse(vax_delay == 0, 1, 2)
       ))
