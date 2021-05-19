@@ -72,6 +72,8 @@ testqs: $(patsubst %,${ODIR}/epiq/%.rds,00001 00002 00003 00004 00005 00006 0000
 ${ODIR}/epi_quantile.rds: qmerge.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/epiq/*.rds)) | ${ODIR}/epiq
 	Rscript $< $| $@
 
+epiq: ${ODIR}/epi_quantile.rds
+
 ECONDATA := covid_other_costs.csv covid_vac_costs_per_dose.csv daly_scenarios.csv
 
 # compute the econ scenarios for each epi scenario - these are quantiles

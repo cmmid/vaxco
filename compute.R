@@ -47,6 +47,11 @@ date_vax <- as.Date(scen.dt$start_timing, origin = "1970-01-01")
 t_vax <- as.numeric(date_vax - as.Date(fitS$par$date0))
 fitS$par <- cm_check_parameters(cm_translate_parameters(fitS$par))
 
+deathp <- fitS$par$processes[[1]]
+deathp$source <- "Ev"
+hospp <- fitS$par$processes[[2]]
+hospp$source <- "Ev"
+
 #' first 3 years + vax anniversaries
 # validation_times <- seq(7, 365*3, by=7)
 anni_times <- seq(t_vax, by=365, length.out = scen.dt$horizon+1) #' horizon years + 1
@@ -80,8 +85,16 @@ if (scen.dt$strategy == "campaign") {
     fitS$par$pop[[1]]$ev = rep(1, 16)
     if (scen.dt$vax_mech == "infection") {
       fitS$par$pop[[1]]$uv = fitS$par$pop[[1]]$u*rep(1-scen.dt$vax_eff, 16) #' TODO mods by age?
+      # can still end up in Ev => if in Ev, proceed as normal to diseased outcomes
+      fitS$par$processes <- c(fitS$par$processes, list(deathp, hospp))
     } else { # against disease
       fitS$par$pop[[1]]$yv = fitS$par$pop[[1]]$y*rep(1-scen.dt$vax_eff, 16)
+      # can still end up with bad outcomes, but reduced probability
+      deathp$prob[1,] <- deathp$prob[1,]*rep(1-scen.dt$vax_eff, 16)
+      deathp$prob[2,] <- 1 - deathp$prob[1,]
+      hospp$prob[1:3, ] <- hospp$prob[1:3, ]*rep(1-scen.dt$vax_eff, 16)
+      hospp$prob[4, ] <- 1 - colSums(hospp$prob[1:3, ])
+      fitS$par$processes <- c(fitS$par$processes, list(deathp, hospp))
     }
   }
   
@@ -175,12 +188,21 @@ keepoutcomes <- c(
   "non_icu_severe_p", "non_icu_critical_p", "icu_critical_p"
 )
 
+cm_process_consolidate <- function(dt) {
+  dupnames <- grep("\\.\\d$", names(dt), value = TRUE)
+  for (dup in dupnames) {
+    ddup = gsub("\\.\\d$","",dup)
+    dt[[ddup]] <- dt[[ddup]] + dt[[dup]]
+  }
+  dt[, .SD, .SDcols = -dupnames]
+}
+
 # sample from posterior to generate runs
 all_runs = rbindlist(lapply(1:scen.dt$n_samples, function (n) {
-  runs = cm_backend_sample_fit_test(
+  res <- cm_process_consolidate(cm_backend_sample_fit_test(
     cm_translate_parameters(fitS$par),
     fitS$post, 1, seed = n
-  )[[1]][order(t), {
+  )[[1]])[order(t), {
     ret <- lapply(
       .SD[,.SD,.SDcols=keepoutcomes],
       cumsum
