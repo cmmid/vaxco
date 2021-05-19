@@ -11,7 +11,8 @@ t_horizon <- 10
 # paths
 path.in  <- "~/Dropbox/Covid-WHO-vax/inputs/"
 path.out <- "~/Dropbox/Covid-WHO-vax/outputs/"
-path.fig <- "~/Dropbox/Covid-WHO-vax/figures/"
+# path.fig <- "~/Dropbox/Covid-WHO-vax/figures/"
+path.fig <- "~/Dropbox/Covid-WHO-vax/figures/revised_after_review/"
 
 # load epi scenario info
 drv <- RSQLite::SQLite()
@@ -98,7 +99,7 @@ base_econ_id <- econ_scen.dt[perspective=="health_system" &
                                  vac_price==3 &
                                  daly_scenario=="high" &
                                  disc.costs==0.03 &
-                                 disc.dalys==0.00
+                                 disc.dalys==0.03 # changed base case to 3%
                              ,econ_id]
 
 
@@ -136,7 +137,7 @@ base.list <- list(scen_name="Vaccine base case",
                   vac_price=3,
                   daly_scenario="high",
                   disc.costs=0.03,
-                  disc.dalys=0.00
+                  disc.dalys=0.03 # changed base case to 3%
 )
 
 # build data table for plots 
@@ -178,7 +179,7 @@ plt.costs <- function(meas = "costs_md",
                       mid = "#BA585C",
                       low = "#000000") ggplot(plots.dt[
         daly_scenario == "high" & 
-        disc.dalys == 0.00 &
+        disc.dalys == 0.03 &
         perspective %in% c("health_system","societal")
 ]) +
     facet_grid(
@@ -300,7 +301,7 @@ plt.icers1 <- function(meas = "icer_md",
                       #high = "#56B1F7"
                       high = "#6656F7") ggplot(plots.dt[
                           daly_scenario == "high" & 
-                          disc.dalys == 0.00 &
+                          disc.dalys == 0.03 &
                           perspective %in% c("health_system","societal") #&
                               #nat_imm_dur_days !="Inf"
                       ]) +
@@ -409,6 +410,7 @@ ggsave(tarfile, plot.icers2, width = 7.5, height = 6, units = "in")
 # Scenarios table
 
 # Generate scenario analysis list. MUST be a better way to do this...
+# update to 3% qaly discounting as the base case
 scen.list <- list()
 
 to.add <- base.list
@@ -443,7 +445,7 @@ scen.list <- rbindlist(list(scen.list, to.add))
 
 to.add <- base.list
 to.add$scen_name = "1 dose regimen (twice rate of people vaccinated)"
-#to.add$vax_delay = 0 
+# to.add$vax_delay = 0
 to.add$doses_per_day = 8000
 scen.list <- rbindlist(list(scen.list, to.add))
 
@@ -463,8 +465,8 @@ to.add$vac_price = 10
 scen.list <- rbindlist(list(scen.list, to.add))
 
 to.add <- base.list
-to.add$scen_name = "DALYs discounted at 3%"
-to.add$disc.dalys = 0.03
+to.add$scen_name = "DALYs discounted at 0%" # 0% now scenario not base case
+to.add$disc.dalys = 0.00
 scen.list <- rbindlist(list(scen.list, to.add))
 
 to.add <- base.list
@@ -486,15 +488,15 @@ scen.dt[,scen_id:=.I]
 # summary of 10 year costs and dalys averted
 scen.tab <- scen.dt[,.("Scenario No."=scen_id,"Description"=scen_name,
                        "Difference in Cost ($ millions)" = sprintf(
-                           "%.3f (%.3f, %.3f)",
+                           "%.1f (%.1f, %.1f)",
                            ccosts_md/10^6,ccosts_lo95/10^6,ccosts_hi95/10^6
                            ),
                        "DALYs Averted (thousands)" = sprintf(
-                           "%.3f (%.3f, %.3f)",
+                           "%.1f (%.1f, %.1f)",
                            cdalys_md/10^3,cdalys_lo95/10^3,cdalys_hi95/10^3
                        ),
                        "$ per DALY Averted" = sprintf(
-                           "%.3f (%.3f, %.3f)",
+                           "%.1f (%.1f, %.1f)",
                            icer_md,icer_lo95,icer_hi95
                        ),
                        id,econ_id)]
@@ -506,11 +508,11 @@ ids <- unique(scen.tab[,id])
 scen.tab <- scen.tab[
     epi.dt[id %in% ids & anni_year<=t_horizon,
            .("Cases Averted (millions)" = sprintf(
-                 "%.3f (%.3f, %.3f)",
+                 "%.1f (%.1f, %.1f)",
                  sum(cases.del_md)/10^6,sum(cases.del_lo95)/10^6,sum(cases.del_hi95)/10^6
              ),
              "Deaths Averted (thousands)" = sprintf(
-                 "%.3f (%.3f, %.3f)",
+                 "%.1f (%.1f, %.1f)",
                  sum(death_o.del_md)/10^3,sum(death_o.del_lo95)/10^3,sum(death_o.del_hi95)/10^3
              )
             ), 
