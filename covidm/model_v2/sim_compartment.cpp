@@ -56,7 +56,6 @@ void Population::Contagiousness(Parameters& P, Randomizer& Rand, double t, vecto
         n = min(n, S[age]);
         S[age] -= n;
         E[age].Add(P, Rand, n, P.pop[p].dE);
-        Ev[age].Add(P, Rand, n, P.pop[p].dEv);
     };
 
     // Do seeding
