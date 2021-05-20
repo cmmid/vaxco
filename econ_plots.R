@@ -15,11 +15,7 @@ path.out <- "~/Dropbox/Covid-WHO-vax/outputs/"
 path.fig <- "~/Dropbox/Covid-WHO-vax/figures/revised_after_review/"
 
 # load epi scenario info
-drv <- RSQLite::SQLite()
-conn <- dbConnect(drv, dbname=paste0(path.out,"config.sqlite"))
-epi_scen.dt  <- data.table(dbReadTable(conn,"scenario"))
-
-dbDisconnect(conn)
+epi_scen.dt <-  as.data.table(readRDS(paste0(path.out,"config.rds")))
 
 # load econ scenario info
 
@@ -73,12 +69,13 @@ base_id <- epi_scen.dt[#setId==0 &
                            vax_eff==0.7 &
                            nat_imm_dur_days==912 &
                            vax_imm_dur_days==912 &
-                           start_timing==18718 &
+                           start_timing=="2021-04-01" &
                            vax_delay==30 & # 2-dose regimen
                            repeat_period==0 &
                            repeat_number==0 &
                            seasonality=="none" &
                            doses_per_day==4000 &
+                           increasing==TRUE &
                            strategy_str==365 & # 1 year campaign
                            from_age==14 &
                            to_age==16 &
@@ -89,7 +86,7 @@ base_id <- epi_scen.dt[#setId==0 &
                            clin_frac=="nat med fit" &
                            subclin_inf==0.5 &
                            horizon==10 &
-                           birthdeath=="no" &
+                           birthdeath=="yes" &
                            hosp_model=="current" &
                            icu_model=="current" &
                            death_model=="current"
@@ -113,12 +110,13 @@ base.list <- list(scen_name="Vaccine base case",
                   vax_eff=0.7,
                   nat_imm_dur_days=912,
                   vax_imm_dur_days=912,
-                  start_timing=18718,
+                  start_timing=as.Date("2021-04-01"),
                   vax_delay=30,
                   repeat_period=0,
                   repeat_number=0,
                   seasonality="none",
                   doses_per_day=4000,
+                  increasing=TRUE,
                   strategy_str=365,
                   from_age=14,
                   to_age=16,
@@ -129,7 +127,7 @@ base.list <- list(scen_name="Vaccine base case",
                   clin_frac="nat med fit",
                   subclin_inf=0.5,
                   horizon=10,
-                  birthdeath="no",
+                  birthdeath="yes",
                   hosp_model="current",
                   icu_model="current",
                   death_model="current",
