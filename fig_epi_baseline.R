@@ -5,39 +5,27 @@ suppressPackageStartupMessages({
     require(ggh4x)
 })
 
-.debug <- "~/Dropbox/Covid-WHO-vax/outputs"
+.debug <- "~/Dropbox/Covid-WHO-vax"
 .args <- if (interactive()) sprintf(c(
-    "%s/epi_quantile.rds",
-    "%s/config.sqlite",
+    "%s/outputs/epi_quantile.rds",
+    "%s/inputs/config.rds",
     "%s/figures/baseline.png"
 ), .debug)
 
-epi.dt <- readRDS(.args[1])
+scn <- readRDS(.args[2])[, .(
+    id, strategy, vax_eff, nat_imm_dur_days, vax_imm_dur_days,
+    start_timing, vax_delay, doses_per_day, strategy_str, from_age
+)][strategy == "none" & start_timing == min(start_timing)]
+
+epi.dt <- readRDS(.args[1])[id %in% scn$id]
+setkey(epi.dt, id, age, qtile, anni_year)
 
 agg.dt <- epi.dt[, .(
     age="all", cases = sum(cases), deaths = sum(death_o),
     del.cases = sum(cases.del), del.deaths = sum(death_o.del)
 ), by=setdiff(key(epi.dt),"age")]
 
-readDBtable <- function(
-    fl, tbl = "scenario",
-    drv = RSQLite::SQLite(), flags = SQLITE_RO
-) {
-    conn <- dbConnect(drv, fl, flags = flags)
-    res <- data.table(dbReadTable(conn, tbl))
-    dbDisconnect(conn)
-    res
-}
-
-scn <- readDBtable(.args[2])[, .(
-    id, strategy, vax_eff, nat_imm_dur_days, vax_imm_dur_days,
-    start_timing, vax_delay, doses_per_day, strategy_str, from_age
-)]
-
-#' only looking at the earlier start
-full.dt <- agg.dt[
-    scn, on=.(id)
-][strategy == "none" & start_timing == min(start_timing)]
+full.dt <- agg.dt[scn, on=.(id)]
 
 fig.dt <- melt(
     full.dt, id.vars = c("nat_imm_dur_days", "qtile", "anni_year"),

@@ -1,21 +1,31 @@
 
 suppressPackageStartupMessages({
     require(data.table)
-    require(RSQLite)
     require(ggplot2)
     require(ggh4x)
 })
 
-.debug <- c("~/Dropbox/Covid-WHO-vax/outputs", "4000")
+.debug <- c("~/Dropbox/Covid-WHO-vax", "4000")
 .args <- if (interactive()) sprintf(c(
-    "%s/epi_quantile.rds",
-    "%s/config.sqlite",
+    "%s/outputs/epi_quantile.rds",
+    "%s/inputs/config.rds",
     "%s/figures/other_averted_%s.png"
 ), .debug[1], .debug[2])
 
 dosetar <- as.integer(gsub("^.+_(\\d+)\\.(png|pdf)$","\\1",tail(.args, 1)))
 
-epi.dt <- readRDS(.args[1])
+scn <- readRDS(.args[2])[, .(
+    id, strategy, vax_eff, nat_imm_dur_days, vax_imm_dur_days,
+    start_timing, vax_delay, doses_per_day, strategy_str, from_age,
+    vax_mech, eff_mech
+)][
+    strategy != "none" & start_timing == 18718 &
+    doses_per_day == dosetar & vax_delay == 30 &
+    strategy_str == 365 & vax_mech == "infection" &
+    eff_mech == "allornothing"
+]
+
+epi.dt <- readRDS(.args[1])[id %in% scn$id]
 setkeyv(epi.dt,c("id","age","qtile","anni_year"))
 
 agg.dt <- epi.dt[, .(
@@ -29,21 +39,6 @@ agg.dt <- epi.dt[, .(
     del.non_icu_p = sum(non_icu_severe_p.del+non_icu_critical_p.del),
     del.icu_p = sum(icu_critical_p.del)
 ), by=setdiff(key(epi.dt),"age")]
-
-readDBtable <- function(
-    fl, tbl = "scenario",
-    drv = RSQLite::SQLite(), flags = SQLITE_RO
-) {
-    conn <- dbConnect(drv, fl, flags = flags)
-    res <- data.table(dbReadTable(conn, tbl))
-    dbDisconnect(conn)
-    res
-}
-
-scn <- readDBtable(.args[2])[, .(
-    id, strategy, vax_eff, nat_imm_dur_days, vax_imm_dur_days,
-    start_timing, vax_delay, doses_per_day, strategy_str, from_age
-)]
 
 full.dt <- agg.dt[scn, on=.(id)]
 full.dt$strategy_str <- as.numeric(full.dt$strategy_str)
