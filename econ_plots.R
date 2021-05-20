@@ -1,5 +1,4 @@
 
-require(RSQLite)
 require(data.table)
 require(ggplot2)
 
@@ -15,7 +14,7 @@ path.out <- "~/Dropbox/Covid-WHO-vax/outputs/"
 path.fig <- "~/Dropbox/Covid-WHO-vax/figures/revised_after_review/"
 
 # load epi scenario info
-epi_scen.dt <-  as.data.table(readRDS(paste0(path.out,"config.rds")))
+epi_scen.dt <-  as.data.table(readRDS(paste0(path.in,"config.rds")))
 
 # load econ scenario info
 
@@ -36,7 +35,7 @@ econ_scen.dt <- data.table(expand.grid(
 # load results
 
 epi.dt <- data.table(readRDS(paste0(path.out,"epi_quantile.rds")))
-econ.dt <- data.table(readRDS(paste0(path.out,"econ/merge.rds")))
+econ.dt <- data.table(readRDS(paste0(path.out,"econ_quantile.rds")))
 
 epi.dt <- epi.dt[qtile %in% c("lo95","md","hi95")]
 econ.dt <- econ.dt[qtile %in% c("lo95","md","hi95") & # drop unused qtiles

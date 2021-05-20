@@ -67,10 +67,10 @@ ${ODIR}/epi_baseline.rds: epi_baseline.R $(filter-out ${SUMMARIES}, $(wildcard $
 ${ODIR}/epiq/%.rds: epi_quantile.R ${ODIR}/sim/%.rds ${CONFDB} ${ODIR}/epi_baseline.rds
 	Rscript $^ $* $@
 
-testqs: $(patsubst %,${ODIR}/epiq/%.rds,00001 00002 00003 00004 00005 00006 00007 00008 18433 18434 18435 18436 18437 18438 18439 18440)
+epiall: $(patsubst %,${ODIR}/epiq/%.rds,$(shell seq -f%05g 1 20488))
 
-${ODIR}/epi_quantile.rds: qmerge.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/epiq/*.rds)) | ${ODIR}/epiq
-	Rscript $< $| $@
+${ODIR}/epi_quantile.rds: qmerge.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/epiq/*.rds)) | ${ODIR}/epiq epiall
+	Rscript $^ $(firstword $|) $@
 
 epiq: ${ODIR}/epi_quantile.rds
 
@@ -89,13 +89,32 @@ eone: $(patsubst %,${ODIR}/econ/%.rds,00001)
 eall: $(patsubst %,${ODIR}/econ/%.rds,$(shell seq -f%05g 1 20488))
 
 # merge the econ quantiled scenarios
-${ODIR}/econ/merge.rds: econ_merge.R | eall
-	Rscript $^ ${ODIR}/econ $@
+${ODIR}/econ_quantile.rds: qmerge.R | ${ODIR}/econ eall
+	Rscript $^ $(firstword $|) $@
 
 ${ODIR}/validation.rds: validation_set.R ${CONFDB} $(wildcard ${OTHPAT}*.sqlite)
 	Rscript $(wordlist 1,2,$^) ${OTHPAT} $@
 
-digest: ${ODIR}/epi_quantile.rds ${ODIR}/econ/merge.rds ${ODIR}/validation.rds
+digest: ${ODIR}/epi_quantile.rds ${ODIR}/econ_quantile.rds ${ODIR}/validation.rds
+
+# MT FIG2 - validation figure
+${FDIR}/baseline.png: fig_epi_baseline.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
+	${R}
+
+# MT FIG3 - cases/deaths averted for initial 4000k doses per day, allornothing-infection vaccine
+# 2.5 year natural immunity, varying vaccine immunity duration
+${FDIR}/averted_4000.png: fig_epi_averted.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
+	${R}
+
+# SI FIG S4 S5 - hosp outcomes averted for initial 4000k doses per day, allornothing-infection vaccine
+# 2.5 year natural immunity, varying vaccine immunity duration
+${FDIR}/other_averted_4000.png ${FDIR}/other_averted_4000_non.png &: fig_epi_averted_other.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
+	${R}
+
+${FDIR}/averted_4000.png: fig_epi_averted.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
+	${R}
+
+
 
 ${FDIR}/incremental.png: fig_incremental.R ${IDIR}/scenarios.rds ${ODIR}/quantiles.rds ${ODIR}/baseline.rds
 	${R}
@@ -106,9 +125,4 @@ ${FDIR}/validation.png: fig_validation.R ${IDIR}/scenarios.rds ${ODIR}/validatio
 ${FDIR}/icer.png: fig_icer.R ${IDIR}/config_high.sqlite ${ODIR}/icer.rds
 	${R}
 
-figs: ${FDIR}/incremental.png ${FDIR}/validation.png
-
-${ODIR}/sim_model.rds: sim_model_fit.R ${DATAPTH}/fitd_combined.qs sindh_data.csv | ${CMPTH}
-	Rscript $^ $| $@
-
-smodel: ${ODIR}/sim_model.rds
+figs: $(patsubst %,${FDIR}/%.png,baseline averted_4000 incremental validation other_averted_4000)
