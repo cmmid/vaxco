@@ -188,21 +188,21 @@ keepoutcomes <- c(
   "non_icu_severe_p", "non_icu_critical_p", "icu_critical_p"
 )
 
-cm_process_consolidate <- function(dt) {
-  dupnames <- grep("\\.\\d$", names(dt), value = TRUE)
-  for (dup in dupnames) {
-    ddup = gsub("\\.\\d$","",dup)
-    dt[[ddup]] <- dt[[ddup]] + dt[[dup]]
-  }
-  dt[, .SD, .SDcols = -dupnames]
-}
+# cm_process_consolidate <- function(dt) {
+#   dupnames <- grep("\\.\\d$", names(dt), value = TRUE)
+#   for (dup in dupnames) {
+#     ddup = gsub("\\.\\d$","",dup)
+#     dt[[ddup]] <- dt[[ddup]] + dt[[dup]]
+#   }
+#   dt[, .SD, .SDcols = -dupnames]
+# }
 
 # sample from posterior to generate runs
 all_runs = rbindlist(lapply(1:scen.dt$n_samples, function (n) {
-  res <- cm_process_consolidate(cm_backend_sample_fit_test(
+  res <- cm_backend_sample_fit_test(
     cm_translate_parameters(fitS$par),
     fitS$post, 1, seed = n
-  )[[1]])[order(t), {
+  [[1]])[order(t), {
     ret <- lapply(
       .SD[,.SD,.SDcols=keepoutcomes],
       cumsum
