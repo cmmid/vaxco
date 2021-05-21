@@ -55,7 +55,10 @@ ${DATAPTH}/fitd_combined.qs: merge_fits.R ${DFITS}
 	${R}
 
 ${ODIR}/sim/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH} ${ODIR}/sim
-	Rscript $^ $* $(word 1,$|) $@
+	Rscript $^ $* $(firstword $|) $@
+
+test/%.rds: test_compute.R ${DATASRC} ${CONFDB} | ${CMPTH} ${ODIR}/sim
+	Rscript $^ $* $(firstword  $|) $@
 
 testsim: ${ODIR}/sim/00001.rds
 
@@ -66,6 +69,11 @@ ${ODIR}/epi_baseline.rds: epi_baseline.R $(filter-out ${SUMMARIES}, $(wildcard $
 
 ${ODIR}/epiq/%.rds: epi_quantile.R ${ODIR}/sim/%.rds ${CONFDB} ${ODIR}/epi_baseline.rds
 	Rscript $^ $* $@
+
+epitest: $(patsubst %,test/%.rds,3778 3786 3794 3802 12994 13002 13010 13018 18434)
+
+cleanepitest:
+	rm test/*.rds
 
 epiall: $(patsubst %,${ODIR}/epiq/%.rds,$(shell seq -f%05g 1 20488))
 
@@ -110,11 +118,6 @@ ${FDIR}/averted_4000.png: fig_epi_averted.R ${ODIR}/epi_quantile.rds ${CONFDB} |
 # 2.5 year natural immunity, varying vaccine immunity duration
 ${FDIR}/other_averted_4000.png ${FDIR}/other_averted_4000_non.png &: fig_epi_averted_other.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
 	${R}
-
-${FDIR}/averted_4000.png: fig_epi_averted.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
-	${R}
-
-
 
 ${FDIR}/incremental.png: fig_incremental.R ${IDIR}/scenarios.rds ${ODIR}/quantiles.rds ${ODIR}/baseline.rds
 	${R}
