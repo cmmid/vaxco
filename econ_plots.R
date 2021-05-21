@@ -430,6 +430,20 @@ to.add$strategy_str = 0
 scen.list <- rbindlist(list(scen.list, to.add))
 
 to.add <- base.list
+to.add$scen_name = "Slow roll out: 4000 vaccinees per day no scale-up"
+to.add$strategy_str = 0
+to.add$doses_per_day = 4000
+to.add$increasing = FALSE
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "Fast roll out: 240K vaccinees per day no scale-up"
+to.add$from_age = 4
+to.add$doses_per_day = 240000
+to.add$increasing = FALSE
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
 to.add$scen_name = "1 year vaccine & natural immunity waning"
 to.add$nat_imm_dur_days = 365
 to.add$vax_imm_dur_days = 365
@@ -442,7 +456,7 @@ scen.list <- rbindlist(list(scen.list, to.add))
 
 to.add <- base.list
 to.add$scen_name = "1 dose regimen (twice rate of people vaccinated)"
-# to.add$vax_delay = 0
+to.add$vax_delay = 0
 to.add$doses_per_day = 8000
 scen.list <- rbindlist(list(scen.list, to.add))
 
@@ -454,6 +468,16 @@ scen.list <- rbindlist(list(scen.list, to.add))
 to.add <- base.list
 to.add$scen_name = "90% vaccine efficacy"
 to.add$vax_eff = 0.9
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "Vaccine protects against disease not infection"
+to.add$vax_mech = "disease"
+scen.list <- rbindlist(list(scen.list, to.add))
+
+to.add <- base.list
+to.add$scen_name = "Vaccine protection is leaky"
+to.add$eff_mech = "leaky"
 scen.list <- rbindlist(list(scen.list, to.add))
 
 to.add <- base.list
@@ -476,10 +500,9 @@ to.add$scen_name = "Societal perspective"
 to.add$perspective = "societal"
 scen.list <- rbindlist(list(scen.list, to.add))
 
-
 n <- names(scen.list)[-1] # name of fields to join on
-scen.dt <-as.data.table(scen.list)
-scen.dt <- econ.dt[as.data.table(scen.list),on=n][anni_year==t_horizon]
+scen.dt <- as.data.table(scen.list)
+scen.dt <- econ.dt[scen.dt,on=n][anni_year==t_horizon]
 scen.dt[,scen_id:=.I]
 
 # summary of 10 year costs and dalys averted
