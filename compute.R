@@ -4,7 +4,7 @@ suppressPackageStartupMessages({
     require(qs)
 })
 
-.debug <- c("~/Dropbox/Covid-WHO-vax", "1537")
+.debug <- c("~/Dropbox/Covid-WHO-vax", "00001")
 .args <- if (interactive()) sprintf(c(
     "fitd_combined.qs", "epi_data.csv", "mob_data.csv",
     "%s/inputs/config.rds", .debug[2], "covidm", "%s/outputs/sim/%s.rds"
@@ -86,7 +86,7 @@ if (scen.dt$strategy == "campaign") {
     if (scen.dt$vax_mech == "infection") {
       fitS$par$pop[[1]]$uv = fitS$par$pop[[1]]$u*rep(1-scen.dt$vax_eff, 16) #' TODO mods by age?
       # can still end up in Ev => if in Ev, proceed as normal to diseased outcomes
-      fitS$par$processes <- c(fitS$par$processes, list(deathp, hospp))
+      fitS$par$processes <- c(fitS$par$processes[c(1,2)], list(deathp, hospp), fitS$par$processes[-c(1,2)])
     } else { # against disease
       fitS$par$pop[[1]]$yv = fitS$par$pop[[1]]$y*rep(1-scen.dt$vax_eff, 16)
       # can still end up with bad outcomes, but reduced probability
@@ -94,11 +94,9 @@ if (scen.dt$strategy == "campaign") {
       deathp$prob[2,] <- 1 - deathp$prob[1,]
       hospp$prob[1:3, ] <- hospp$prob[1:3, ]*rep(1-scen.dt$vax_eff, 16)
       hospp$prob[4, ] <- 1 - colSums(hospp$prob[1:3, ])
-      fitS$par$processes <- c(fitS$par$processes, list(deathp, hospp))
+      fitS$par$processes <- c(fitS$par$processes[c(1,2)], list(deathp, hospp), fitS$par$processes[-c(1,2)])
     }
   }
-  
-
     
   fitS$par$pop[[1]]$wv = mk_waning(scen.dt$vax_imm_dur_days)
     
@@ -202,7 +200,7 @@ all_runs = rbindlist(lapply(1:scen.dt$n_samples, function (n) {
   res <- cm_backend_sample_fit_test(
     cm_translate_parameters(fitS$par),
     fitS$post, 1, seed = n
-  [[1]])[order(t), {
+  )[[1]][order(t), {
     ret <- lapply(
       .SD[,.SD,.SDcols=keepoutcomes],
       cumsum
