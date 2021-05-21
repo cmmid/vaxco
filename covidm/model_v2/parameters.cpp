@@ -63,10 +63,17 @@ void ParamSet(vector<ProcessSpec>& variable, Rcpp::RObject& value)
             {
                 process.ids[j] = Null;
             }
-            else
-            {
-                process.ids[j] = pc_id++;
-                pc_names.push_back(process.names[j]);
+            else { 
+                auto sn = std::find(pc_names.begin(), pc_names.end(), process.names[j]);
+                if (pc_names.end() == sn)
+                {
+                    process.ids[j] = pc_id++;
+                    pc_names.push_back(process.names[j]);
+                }
+                else
+                {
+                    process.ids[j] = (unsigned int)(sn - pc_names.begin());
+                }
             }
         }
         process.report = Rcpp::as<vector<string>>(pli["report"]);

@@ -176,6 +176,9 @@ void Population::Tick(Parameters& P, Randomizer& Rand, double t, vector<double>&
             {
                 for (unsigned int i = 0; i < process.p_cols.size(); ++i)
                     rep(t, p, a, process.p_cols[i]) = pc[process.p_ids[i]][a].Size();
+                // processes can lead to the same columns; this will lead to some
+                // re-assignment of the same values; should be = (not +=), as incorporation
+                // *into* pc is effectively the += part
             }
 
         }
@@ -250,6 +253,11 @@ void Population::Tick(Parameters& P, Randomizer& Rand, double t, vector<double>&
         R[a] += nIa_R;
 
         // 2. User-specified processes
+        // assert: processes are ordered such that when iterating
+        // all sources have received all their inputs from prior processes
+        // so:
+        // if a negative input exists for a needed source, it can be matured from pc at that time
+        // after the loop, all the pcos that are still negative can be matured from the pcs
         fill(pco.begin(), pco.end(), -1.);
 
         for (auto& process : P.processes)
@@ -260,12 +268,18 @@ void Population::Tick(Parameters& P, Randomizer& Rand, double t, vector<double>&
             {
                 case srcS:
                     n_entering = nS_E; break;
-                case srcE: case srcEv:
+                case srcE:
                     n_entering = nE_Ipa; break;
-                case srcEp: case srcEvp:
+                case srcEv:
+                    n_entering = nEv_Ipa; break;
+                case srcEp:
                     n_entering = nE_Ip; break;
-                case srcEa: case srcEva:
+                case srcEvp:
+                    n_entering = nEv_Ip; break;
+                case srcEa:
                     n_entering = nE_Ia; break;
+                case srcEva:
+                    n_entering = nEv_Ia; break;
                 case srcIp:
                     n_entering = nIp_Is; break;
                 case srcIs:
@@ -277,10 +291,14 @@ void Population::Tick(Parameters& P, Randomizer& Rand, double t, vector<double>&
                 case srcCasesReported:
                     n_entering = n_to_report; break;
                 default:
+                    if (pco[process.source_id] < 0) {
+                        pco[process.source_id] = pc[process.source_id][a].Mature();
+                    }
                     n_entering = pco[process.source_id];
-                    if (n_entering < 0)
-                        throw logic_error("Process sourced from unset user process. Have user processes been specified in the right order?");
-                    break;
+                    // TODO: replace below with some other kind of validation re processes ordering?
+                    // if (n_entering < 0)
+                    //     throw logic_error("Process sourced from unset user process:" + process.source_name + " - have user processes been specified in the right order?");
+                    // break;
             }
 
             multinomial(n_entering, process.prob[a], nd_out, ni_out);
@@ -292,12 +310,13 @@ void Population::Tick(Parameters& P, Randomizer& Rand, double t, vector<double>&
                 if (compartment_id != Null)
                 {
                     pc[compartment_id][a].Add(P, Rand, nd_out[c], process.delays[c]);
-                    pci[compartment_id] = nd_out[c];
-                    pco[compartment_id] = pc[compartment_id][a].Mature();
+                    pci[compartment_id] += nd_out[c];
                 }
                 ++c;
             }
         }
+        
+        for (size_t i = 0; i < pco.size(); i++) if (pco[i] < 0) pco[i] = pc[i][a].Mature();
 
         // 3. Report incidence / outcidence
         // Built-in states

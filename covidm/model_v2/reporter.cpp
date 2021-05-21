@@ -35,17 +35,25 @@ Reporter::Reporter(Parameters& P)
         {
             for (unsigned int k = 0; k < pr.report[j].size(); ++k)
             {
-                col_names.push_back(pr.names[j] + "_" + pr.report[j][k]);
-                data.push_back(vector<double>(n_times * n_populations * n_age_groups, 0.));
+                auto colname = pr.names[j] + "_" + pr.report[j][k];
+                auto sn = std::find(col_names.begin(), col_names.end(), colname);
+                unsigned int index;
+                if (sn == col_names.end()) {
+                    col_names.push_back(colname);
+                    data.push_back(vector<double>(n_times * n_populations * n_age_groups, 0.));
+                    index = data.size()-1;
+                } else {
+                    index = (unsigned int)(sn - col_names.begin());
+                }
 
                 if (pr.report[j][k] == 'p') {
-                    pr.p_cols.push_back(data.size() - 1);
+                    pr.p_cols.push_back(index);
                     pr.p_ids.push_back(pr.ids[j]);
                 } else if (pr.report[j][k] == 'i') {
-                    pr.i_cols.push_back(data.size() - 1);
+                    pr.i_cols.push_back(index);
                     pr.i_ids.push_back(pr.ids[j]);
                 } else if (pr.report[j][k] == 'o') {
-                    pr.o_cols.push_back(data.size() - 1);
+                    pr.o_cols.push_back(index);
                     pr.o_ids.push_back(pr.ids[j]);
                 } else {
                     throw runtime_error("Unrecognized process report type " + string(1, pr.report[j][k]) + ".");
