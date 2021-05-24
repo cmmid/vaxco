@@ -259,6 +259,7 @@ void Population::Tick(Parameters& P, Randomizer& Rand, double t, vector<double>&
         // if a negative input exists for a needed source, it can be matured from pc at that time
         // after the loop, all the pcos that are still negative can be matured from the pcs
         fill(pco.begin(), pco.end(), -1.);
+        fill(pci.begin(), pci.end(), 0.);
 
         for (auto& process : P.processes)
         {
@@ -328,9 +329,9 @@ void Population::Tick(Parameters& P, Randomizer& Rand, double t, vector<double>&
         for (auto& process : P.processes)
         {
             for (unsigned int i = 0; i < process.i_cols.size(); ++i)
-                rep(t, p, a, process.i_cols[i]) += pci[process.i_ids[i]];
+                rep(t, p, a, process.i_cols[i]) = pci[process.i_ids[i]];
             for (unsigned int i = 0; i < process.o_cols.size(); ++i)
-                rep(t, p, a, process.o_cols[i]) += pco[process.o_ids[i]];
+                rep(t, p, a, process.o_cols[i]) = pco[process.o_ids[i]];
         }
     }
 
