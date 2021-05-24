@@ -4,7 +4,7 @@ suppressPackageStartupMessages({
     require(qs)
 })
 
-.debug <- c("~/Dropbox/Covid-WHO-vax", "00001")
+.debug <- c("~/Dropbox/Covid-WHO-vax", "09921")
 .args <- if (interactive()) sprintf(c(
     "fitd_combined.qs", "epi_data.csv", "mob_data.csv",
     "%s/inputs/config.rds", .debug[2], "covidm", "%s/outputs/sim/%s.rds"
@@ -218,13 +218,19 @@ all_runs = rbindlist(lapply(1:scen.dt$n_samples, function (n) {
 #     fitS$post, 1, seed = scen.dt$rng_seed
 # )
 
-#' @examples 
+#' @examples
+#' scndb <- readRDS("~/Dropbox/Covid-WHO-vax/inputs/config.rds")
+#' agg_all <- melt(all_runs, id.vars = c("sampleId", "age", "t"))[,.(value=sum(value)),by=.(sampleId, t, outcome = variable)]
+#' agg_all[order(t), zerod := value - value[1], by=.(sampleId, outcome)]
+#' agg_all[, anni_year := (t - min(t))/365 ]
+#' agg_all[order(t), inc := c(0, diff(value)), by=.(sampleId, outcome)]
 #' require(ggplot2)
-#' p <- ggplot(runs[age == 9]) + aes(anni_year, value, group = sampleId) +
-#'   facet_grid(age ~ ., scales = "free_y") +
-#'   geom_line(
-#'     data=function(dt) dt[outcome == "cases"], alpha = 0.05
-#'   ) + theme_minimal()
+#' p <- ggplot(agg_all[anni_year != 0]) + aes(anni_year, inc, group = sampleId) +
+#'   facet_grid(outcome ~ ., scales = "free_y") +
+#'   geom_line(alpha = 0.05) + theme_minimal() +
+#'   scale_x_continuous(NULL, breaks = 1:10) +
+#'   scale_y_continuous("Annual Incidence", labels = scales::label_number_si()) +
+#'   coord_cartesian(expand = FALSE)
 
 long.dt <- melt.data.table(
   all_runs, id.vars = c("sampleId","age","t"), variable.name = "outcome"
