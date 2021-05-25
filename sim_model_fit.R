@@ -1,15 +1,12 @@
 suppressPackageStartupMessages({
     require(data.table)
     require(qs)
-    require(ggplot2)
-    require(lubridate)
-    require(patchwork)
 })
 
 .debug <- "~/Dropbox/Covid-WHO-vax/outputs"
 .args <- if (interactive()) sprintf(c(
-    "fitd_combined.qs", "sindh_data.csv",
-    "../covidm-vaxco",
+    "fitd_combined.qs",
+    "covidm",
     "%s/sim_model.rds"
 ), .debug) else commandArgs(trailingOnly = TRUE)
 
@@ -17,7 +14,7 @@ suppressPackageStartupMessages({
 cm_path = tail(.args, 2)[1];
 cm_force_rebuild = F;
 cm_build_verbose = T;
-cm_force_shared = T;
+cm_force_shared = T
 cm_version = 2;
 source(file.path(cm_path, "R", "covidm.R"))
 
@@ -29,7 +26,7 @@ all.dyn <- rbindlist(mapply(function(ft, nm) {
     ft$par$time1 <- as.Date("2021-12-31")
     
     dyn <- rbindlist(
-        cm_backend_sample_fit_test(cm_translate_parameters(ft$par), ft$post, samples, seed = 0)
+        cm_backend_sample_fit_test(cm_check_parameters(cm_translate_parameters(ft$par)), ft$post, samples, seed = 0)
     )[, .(true_deaths = sum(death_o), true_cases = sum(cases), totR = sum(R),
           rep_deaths = obs0[group == 2], rep_cases = obs0[group == 3]), by = .(run, t) ]
     

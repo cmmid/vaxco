@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
 .debug <- "~/Dropbox/Covid-WHO-vax/outputs"
 .args <- if (interactive()) sprintf(c(
     "%s/sim_model.rds",
-    "data_fitting/epi_data.rds",# "data_fitting/epi_data.csv",
+    "data_fitting/epi_data.csv", #" data_fitting/epi_data.rds",# 
     "fitd_combined.qs",
     "%s/figures/model_fit.png"
 ), .debug)
@@ -17,7 +17,7 @@ all.dyn <- readRDS(.args[1])
 
 #' TODO regularize getting this
 # obs.dt = melt(fread(.args[2])[location == "Sindh"], id.vars = 1:2, variable.name = "ind");
-obs.dt <- melt(readRDS(.args[2]), id.vars = c(1, 2, 5, 6), variable.name = "ind")
+obs.dt <- melt(fread(.args[2]), id.vars = c(1, 2), variable.name = "ind")[location == "Sindh"]
 # obs.dt = melt(fread(.args[2])[location == "Sindh"], id.vars = 1:2, variable.name = "ind");
 #' assert: no missing dates
 obs.dt[order(date), rolling := frollmean(value, 7), by = ind ]
