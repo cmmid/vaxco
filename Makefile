@@ -57,8 +57,16 @@ ${DATAPTH}/fitd_combined.qs: merge_fits.R ${DFITS}
 ${ODIR}/sim/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH} ${ODIR}/sim
 	Rscript $^ $* $(firstword $|) $@
 
+.PRECIOUS: ${ODIR}/sim/%.rds
+
 test/%.rds: test_compute.R ${DATASRC} ${CONFDB} | ${CMPTH} ${ODIR}/sim
 	Rscript $^ $* $(firstword  $|) $@
+
+MINSIM := 18433 18434 18435 18436 18437 18438 18439 18440\
+09921 12993 16065 09922 12994 16066 09923 12995 16067 09924 12996 16068\
+03778 12865 13122 14018 12930 13026
+
+minsim: $(patsubst %,${ODIR}/sim/%.rds,${MINSIM})
 
 testsim: ${ODIR}/sim/00001.rds
 
@@ -76,9 +84,11 @@ cleanepitest:
 	rm test/*.rds
 
 epiall: $(patsubst %,${ODIR}/epiq/%.rds,$(shell seq -f%05g 1 20488))
+epimin: $(patsubst %,${ODIR}/epiq/%.rds,${MINSIM})
 
-${ODIR}/epi_quantile.rds: qmerge.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/epiq/*.rds)) | ${ODIR}/epiq epiall
-	Rscript $^ $(firstword $|) $@
+
+${ODIR}/epi_quantile.rds: qmerge.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/epiq/*.rds)) | ${ODIR}/epiq epimin
+	Rscript $< $(firstword $|) $@
 
 epiq: ${ODIR}/epi_quantile.rds
 
@@ -95,15 +105,27 @@ ${ODIR}/econ/baseline.rds: econ.R ${ECONDATA} ${CONFDB} | ${ODIR}/econ
 ebaseline: ${ODIR}/econ/baseline.rds
 eone: $(patsubst %,${ODIR}/econ/%.rds,00001)
 eall: $(patsubst %,${ODIR}/econ/%.rds,$(shell seq -f%05g 1 20488))
+econmin: $(patsubst %,${ODIR}/econ/%.rds,${MINSIM})
 
 # merge the econ quantiled scenarios
-${ODIR}/econ_quantile.rds: qmerge.R | ${ODIR}/econ eall
-	Rscript $^ $(firstword $|) $@
+${ODIR}/econ_quantile.rds: qmerge.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/econ/*.rds)) | ${ODIR}/econ econmin
+	Rscript $< $(firstword $|) $@
 
 ${ODIR}/validation.rds: validation_set.R ${CONFDB} $(wildcard ${OTHPAT}*.sqlite)
 	Rscript $(wordlist 1,2,$^) ${OTHPAT} $@
 
-digest: ${ODIR}/epi_quantile.rds ${ODIR}/econ_quantile.rds ${ODIR}/validation.rds
+digest: ${ODIR}/epi_quantile.rds ${ODIR}/econ_quantile.rds
+
+${ODIR}/sim_model.rds: sim_model_fit.R fitd_combined.qs sindh_data.csv | ${CMPTH}
+	${Rpipe}
+
+simmodel: ${ODIR}/sim_model.rds
+
+
+
+
+
+
 
 # MT FIG2 - validation figure
 ${FDIR}/baseline.png: fig_epi_baseline.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
@@ -114,18 +136,21 @@ ${FDIR}/baseline.png: fig_epi_baseline.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${
 ${FDIR}/averted_4000.png: fig_epi_averted.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
 	${R}
 
+${FDIR}/model_fit.png ${FDIR}/model_fit_ext.png: fig_model_fit.R ${ODIR}/sim_model.rds data_fitting/epi_data.csv fitd_combined.qs
+	${R}
+
 # SI FIG S4 S5 - hosp outcomes averted for initial 4000k doses per day, allornothing-infection vaccine
 # 2.5 year natural immunity, varying vaccine immunity duration
-${FDIR}/other_averted_4000.png ${FDIR}/other_averted_4000_non.png &: fig_epi_averted_other.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
+${FDIR}/other_averted_4000.png ${FDIR}/other_averted_4000_non.png: fig_epi_averted_other.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
 	${R}
 
-${FDIR}/incremental.png: fig_incremental.R ${IDIR}/scenarios.rds ${ODIR}/quantiles.rds ${ODIR}/baseline.rds
-	${R}
+#${FDIR}/incremental.png: fig_incremental.R ${IDIR}/scenarios.rds ${ODIR}/quantiles.rds ${ODIR}/baseline.rds
+#	${R}
 
-${FDIR}/validation.png: fig_validation.R ${IDIR}/scenarios.rds ${ODIR}/validation.rds
-	${R}
+#${FDIR}/validation.png: fig_validation.R ${IDIR}/scenarios.rds ${ODIR}/validation.rds
+#	${R}
 
-${FDIR}/icer.png: fig_icer.R ${IDIR}/config_high.sqlite ${ODIR}/icer.rds
-	${R}
+#${FDIR}/icer.png: fig_icer.R ${IDIR}/config_high.sqlite ${ODIR}/icer.rds
+#	${R}
 
-figs: $(patsubst %,${FDIR}/%.png,baseline averted_4000 incremental validation other_averted_4000)
+figs: $(patsubst %,${FDIR}/%.png,baseline averted_4000 other_averted_4000 model_fit)
