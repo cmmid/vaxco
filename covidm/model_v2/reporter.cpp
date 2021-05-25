@@ -9,58 +9,29 @@ Reporter::Reporter(Parameters& P)
    n_times((unsigned int)(P.time1 - P.time0) + 1),
    n_populations(P.pop.size()),
    n_age_groups(P.pop[0].size.size()),
-   col_names(ref_col_names)
+   col_names(ref_col_names), user_defined_offset(ref_col_names.size())
 {
     if (P.time_step != 1. / P.report_every)
         throw logic_error("Reporter requires P.time_step = 1 / P.report_every.");
 
-    // Create space for built-in compartments
-    for (unsigned int c = 0; c < col_names.size(); ++c)
-        data.push_back(vector<double>(n_times * n_populations * n_age_groups, 0.));
-
+    // Create space for built-in + user-process compartments
+    data = vector<vector<double>>(
+        col_names.size() +
+        P.processes.recording_count,
+        vector<double>(n_times * n_populations * n_age_groups, 0.)
+    );
+    
     // User-defined compartments
-    for (auto& pr : P.processes)
-    {
-        // Reset existing references within parameters to columns
-        // TODO this code should be integrated partly into Parameters, so there are no problems with multiple
-        // instances of Reporter using the same set of Parameters and running into crosstalk issues.
-        pr.p_cols.clear();
-        pr.p_ids.clear();
-        pr.i_cols.clear();
-        pr.i_ids.clear();
-        pr.o_cols.clear();
-        pr.o_ids.clear();
-
-        for (unsigned int j = 0; j < pr.names.size(); ++j)
-        {
-            for (unsigned int k = 0; k < pr.report[j].size(); ++k)
-            {
-                auto colname = pr.names[j] + "_" + pr.report[j][k];
-                auto sn = std::find(col_names.begin(), col_names.end(), colname);
-                unsigned int index;
-                if (sn == col_names.end()) {
-                    col_names.push_back(colname);
-                    data.push_back(vector<double>(n_times * n_populations * n_age_groups, 0.));
-                    index = data.size()-1;
-                } else {
-                    index = (unsigned int)(sn - col_names.begin());
-                }
-
-                if (pr.report[j][k] == 'p') {
-                    pr.p_cols.push_back(index);
-                    pr.p_ids.push_back(pr.ids[j]);
-                } else if (pr.report[j][k] == 'i') {
-                    pr.i_cols.push_back(index);
-                    pr.i_ids.push_back(pr.ids[j]);
-                } else if (pr.report[j][k] == 'o') {
-                    pr.o_cols.push_back(index);
-                    pr.o_ids.push_back(pr.ids[j]);
-                } else {
-                    throw runtime_error("Unrecognized process report type " + string(1, pr.report[j][k]) + ".");
-                }
-            }
-        }
+    for (auto pid : P.processes.prevalence_states) {
+        col_names.push_back(P.processes.state_names[pid] + "_p");
     }
+    for (auto iid : P.processes.incidence_states) {
+        col_names.push_back(P.processes.state_names[iid] + "_i");
+    }
+    for (auto oid : P.processes.outcidence_states) {
+        col_names.push_back(P.processes.state_names[oid] + "_o");
+    }
+    
 }
 
 

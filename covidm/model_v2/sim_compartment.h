@@ -38,11 +38,17 @@ public:
     vector<Compartment> E, Ev, Ip, Ia, Is, C;   // Exposed (Exposed-and-vaccinated), presymptomatic, asymptomatic, symptomatic, cases (reported)
     unsigned int seed_row;                      // Which seed event is next
     unsigned int p;                             // Which population this is
-    vector<vector<Compartment>> pc;             // User-specified process compartments, indexed by process id, then group
-    vector<unsigned int> ni_out;                // Temporary storage
-    vector<double> nd_out;                      // Temporary storage
-    vector<double> pci;                         // Temporary storage
-    vector<double> pco;                         // Temporary storage
+
+    // re-useable temporary storage for multinomial draws    
+    vector<unsigned int> ni_out;
+    vector<double> nd_out;
+    
+    // User-specified process compartments, indexed by process id, then group
+    // e.g. pc[process_id][group] is current value of process_id state for group
+    vector<vector<Compartment>> pc;
+    // re-usable temporary storage for incidence / outcidence monitoring for process states
+    vector<double> pci;
+    vector<double> pco;
 };
 
 // A metapopulation, containing multiple subpopulations.

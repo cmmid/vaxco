@@ -5,7 +5,6 @@
 #include "reporter.h"
 #include "randomizer.h"
 #include "user_defined.h"
-
 //
 // MODEL DYNAMICS
 //
@@ -39,13 +38,12 @@ Population::Population(Parameters& P, unsigned int pindex)
         R[a] += imm;
     }
 
-    // Set up user-specified processes
-    unsigned int n_pc = 0;
-    for (auto& p : P.processes)
-        n_pc += p.ids.size();
-    pc = vector<vector<Compartment>>(n_pc, vector<Compartment>(S.size()));
+    pc = vector<vector<Compartment>>(
+        P.processes.state_count, vector<Compartment>(S.size())
+    );
     pci = vector<double>(pc.size(), 0.);
     pco = vector<double>(pc.size(), 0.);
+    
 }
 
 // Do seeding and calculate contagiousness
@@ -172,15 +170,11 @@ void Population::Tick(Parameters& P, Randomizer& Rand, double t, vector<double>&
             rep(t, p, a, riEv) = Ev[a].Size();
 
             // User-specified processes
-            for (auto& process : P.processes)
-            {
-                for (unsigned int i = 0; i < process.p_cols.size(); ++i)
-                    rep(t, p, a, process.p_cols[i]) = pc[process.p_ids[i]][a].Size();
-                // processes can lead to the same columns; this will lead to some
-                // re-assignment of the same values; should be = (not +=), as incorporation
-                // *into* pc is effectively the += part
-            }
-
+            for (size_t i=0;
+                 i < P.processes.prevalence_states.size();
+                 i++
+            ) rep(t, p, a, rep.user_defined_offset + i) = pc[P.processes.prevalence_states[i]][a].Size();
+ 
         }
 
         // 1. Built-in states
@@ -261,7 +255,7 @@ void Population::Tick(Parameters& P, Randomizer& Rand, double t, vector<double>&
         fill(pco.begin(), pco.end(), -1.);
         fill(pci.begin(), pci.end(), 0.);
 
-        for (auto& process : P.processes)
+        for (auto& process : P.processes.flows)
         {
             // Determine number of individuals entering the process
             double n_entering = 0.;
@@ -304,10 +298,13 @@ void Population::Tick(Parameters& P, Randomizer& Rand, double t, vector<double>&
 
             multinomial(n_entering, process.prob[a], nd_out, ni_out);
 
+            // add to the relevant process compartments
+            
             // Seed and mature this process's compartments
             unsigned int c = 0;
-            for (unsigned int compartment_id : process.ids)
+            for (unsigned int compartment_id : process.sink_ids)
             {
+                // TODO should be irrelevant?
                 if (compartment_id != Null)
                 {
                     pc[compartment_id][a].Add(P, Rand, nd_out[c], process.delays[c]);
@@ -317,6 +314,7 @@ void Population::Tick(Parameters& P, Randomizer& Rand, double t, vector<double>&
             }
         }
         
+        // mature all compartments not yet updated
         for (size_t i = 0; i < pco.size(); i++) if (pco[i] < 0) pco[i] = pc[i][a].Mature();
 
         // 3. Report incidence / outcidence
@@ -325,14 +323,23 @@ void Population::Tick(Parameters& P, Randomizer& Rand, double t, vector<double>&
         rep(t, p, a, ricases_reported) += n_reported;
         rep(t, p, a, risubclinical) += nE_Ia;
 
-        // User-specified processes
-        for (auto& process : P.processes)
-        {
-            for (unsigned int i = 0; i < process.i_cols.size(); ++i)
-                rep(t, p, a, process.i_cols[i]) = pci[process.i_ids[i]];
-            for (unsigned int i = 0; i < process.o_cols.size(); ++i)
-                rep(t, p, a, process.o_cols[i]) = pco[process.o_ids[i]];
-        }
+        // User-specified incidence + outcidence flows
+        for (size_t i=0;
+             i < P.processes.incidence_states.size();
+             i++
+        ) rep(
+            t, p, a,
+            rep.user_defined_offset + P.processes.inc_offset + i
+        ) += pci[P.processes.incidence_states[i]];
+        
+        for (size_t i=0;
+             i < P.processes.outcidence_states.size();
+             i++
+        ) rep(
+            t, p, a,
+            rep.user_defined_offset + P.processes.out_offset + i
+        ) += pco[P.processes.outcidence_states[i]];
+        
     }
 
     // Births, deaths, aging

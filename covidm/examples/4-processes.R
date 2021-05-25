@@ -42,8 +42,8 @@ params = cm_parameters_SEI3R(
 # with parameters mean, shape, max_t and t_step, which needs to be the same as the simulation's time step).
 # You can chain these together by setting the source of another process to one of the names of the subprocesses.
 
-# run the model + combine multisource processes
-run = cm_process_consolidate(cm_simulate(params))
+# run the model
+run = cm_simulate(params)
 
 # show results
 ggplot(run$dynamics[compartment %like% "test"]) +

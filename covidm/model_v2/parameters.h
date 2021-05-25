@@ -133,7 +133,7 @@ public:
 
     vector<PopulationParameters> pop;
 
-    vector<ProcessSpec> processes;
+    ProcessList processes;
     ///Observer observer;
     Matrix travel;
     ChangeSet changes;

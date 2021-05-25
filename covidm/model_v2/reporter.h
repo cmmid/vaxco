@@ -67,6 +67,7 @@ public:
     unsigned int n_populations;
     unsigned int n_age_groups;
     vector<string> col_names;
+    unsigned int user_defined_offset;
 
     vector<vector<double>> data;
     vector<vector<double>> obs;

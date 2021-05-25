@@ -40,87 +40,54 @@ void ParamSet(vector<Matrix>& variable, Rcpp::RObject& value)
     }
 }
 
-void ParamSet(vector<ProcessSpec>& variable, Rcpp::RObject& value)
+void ParamSet(ProcessList& variable, Rcpp::RObject& value)
 {
     
+    // translate each r object into a process object
+    // ids are not set until all process objects available
+    // and are added to a ProcessList
     Rcpp::List pl = Rcpp::as<Rcpp::List>(value);
-    unsigned int pc_id = 0;
-    vector<string> pc_names;
+    vector<ProcessSpec> processes;
+    processes.reserve(pl.size() + 1);
     
-    for (unsigned int i = 0; i < pl.size(); ++i)
-    {
-        Rcpp::List pli = Rcpp::as<Rcpp::List>(pl[i]);
-
+    for (size_t i=0; i<pl.size(); i++) {
+        Rcpp::List rprocessobj = Rcpp::as<Rcpp::List>(pl[i]);
         ProcessSpec process;
-        process.source_name = Rcpp::as<string>(pli["source"]);
-        process.type = Rcpp::as<string>(pli["type"]);
-
-        process.names = Rcpp::as<vector<string>>(pli["names"]);
-        process.ids = vector<unsigned int>(process.names.size(), 0);
-        for (unsigned int j = 0; j < process.ids.size(); ++j)
-        {
-            if (process.names[j] == "null")
-            {
-                process.ids[j] = Null;
-            }
-            else { 
-                auto sn = std::find(pc_names.begin(), pc_names.end(), process.names[j]);
-                if (pc_names.end() == sn)
-                {
-                    process.ids[j] = pc_id++;
-                    pc_names.push_back(process.names[j]);
-                }
-                else
-                {
-                    process.ids[j] = (unsigned int)(sn - pc_names.begin());
-                }
-            }
-        }
-        process.report = Rcpp::as<vector<string>>(pli["report"]);
-
+        process.source_name = Rcpp::as<string>(rprocessobj["source"]);
+        process.type = Rcpp::as<string>(rprocessobj["type"]);
+        process.names = Rcpp::as<vector<string>>(rprocessobj["names"]);
+        
+        process.report = Rcpp::as<vector<string>>(rprocessobj["report"]);
+        
         Matrix m_prob, m_delays;
-        Rcpp::RObject r_prob = Rcpp::as<Rcpp::RObject>(pli["prob"]);
-        Rcpp::RObject r_delays = Rcpp::as<Rcpp::RObject>(pli["delays"]);
+        Rcpp::RObject r_prob = Rcpp::as<Rcpp::RObject>(rprocessobj["prob"]);
+        Rcpp::RObject r_delays = Rcpp::as<Rcpp::RObject>(rprocessobj["delays"]);
         ParamSet(m_prob, r_prob);
         ParamSet(m_delays, r_delays);
-
-        for (unsigned int c = 0; c < m_prob.NCol(); ++c)
+        
+        for (unsigned int group = 0; group < m_prob.NCol(); ++group)
         {
             process.prob.push_back(vector<double>(m_prob.NRow(), 0.));
-            for (unsigned int r = 0; r < m_prob.NRow(); ++r)
-                process.prob[c][r] = m_prob(r, c);
+            for (unsigned int outcome = 0; outcome < m_prob.NRow(); ++outcome)
+                process.prob[group][outcome] = m_prob(outcome, group);
         }
-
-        for (unsigned int r = 0; r < m_delays.NRow(); ++r)
+        
+        for (unsigned int outcome = 0; outcome < m_delays.NRow(); ++outcome)
         {
             process.delays.push_back(Discrete());
             std::vector<double> uw(m_delays.NCol(), 0.);
             for (unsigned int c = 0; c < m_delays.NCol(); ++c)
-                uw[c] = m_delays(r, c);
+                uw[c] = m_delays(outcome, c);
             process.delays.back() = uw;
         }
-
-        variable.push_back(process);
-    }
-
-    // TODO code smell here; use map<string,int>? define transform in process spec?
-    // Set source_ids
-    for (auto& pr : variable)
-    {
-        auto sn = std::find(pc_names.begin(), pc_names.end(), pr.source_name);
-        if (sn == pc_names.end())
-        {
-            if (processSourceMap.find(pr.source_name) == processSourceMap.end()) 
-                throw logic_error("Unrecognized process source name " + pr.source_name);
-            else
-                pr.source_id = processSourceMap.at(pr.source_name);
-        }
-        else
-        {
-            pr.source_id = (unsigned int)(sn - pc_names.begin());
-        }
+        
+        processes.push_back(process);
+        
     }
     
+    
+    variable.Update(processes);
+
 }
 
 
