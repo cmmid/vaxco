@@ -4,7 +4,7 @@ suppressPackageStartupMessages({
     require(qs)
 })
 
-.debug <- c("~/Dropbox/Covid-WHO-vax", "09921")
+.debug <- c("~/Dropbox/Covid-WHO-vax", "18433")
 .args <- if (interactive()) sprintf(c(
     "fitd_combined.qs", "epi_data.csv", "mob_data.csv",
     "%s/inputs/config.rds", .debug[2], "covidm", "%s/outputs/sim/%s.rds"

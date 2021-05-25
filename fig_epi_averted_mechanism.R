@@ -9,6 +9,7 @@ suppressPackageStartupMessages({
 .debug <- c("~/Dropbox/Covid-WHO-vax", "4000")
 .args <- if (interactive()) sprintf(c(
     "%s/outputs/epi_quantile.rds",
+    #"~/Downloads/from_dstl_orig/epi_quantile.rds",
     "%s/inputs/config.rds",
     "%s/figures/mech_averted_%s.png"
 ), .debug[1], .debug[2])
@@ -20,9 +21,15 @@ scn <- readRDS(.args[2])[, .(
     start_timing, vax_delay, doses_per_day, strategy_str, from_age,
     vax_mech, eff_mech, increasing
 )][
-    doses_per_day == dosetar &
+    start_timing == 18718 &
+    doses_per_day == dosetar & vax_delay == 30 &
+    vax_eff == 0.7 & nat_imm_dur_days == round(2.5*365) &
+    vax_imm_dur_days == round(2.5*365) &
+    strategy_str == 365 &
     increasing == TRUE
 ]
+
+scn <- scn[strategy != "none"]
 
 epi.dt <- readRDS(.args[1])[id %in% scn$id]
 setkeyv(epi.dt,c("id","age","qtile","anni_year"))
@@ -38,14 +45,8 @@ full.dt[strategy_str == 0, strategy_str := Inf]
 
 full.dt[order(anni_year), c("cdeaths.av","ccases.av") := .(cumsum(del.deaths),cumsum(del.cases)), by=.(id, qtile)]
 
-fig2.dt <- dcast(melt(full.dt[
-    qtile != "mn" &
-    strategy != "none" & start_timing == 18718 &
-    doses_per_day == dosetar & vax_delay == 30 &
-    vax_eff == 0.7 & nat_imm_dur_days == round(2.5*365) &
-    vax_imm_dur_days == round(2.5*365) &
-    strategy_str == 365
-],
+fig2.dt <- dcast(melt(
+    full.dt[qtile != "mn"],
     id.vars = c("id", "qtile", "anni_year", "vax_mech", "eff_mech", "from_age"),
     measure.vars = c("ccases.av","cdeaths.av")
 ), id + anni_year + vax_mech + eff_mech + from_age + variable ~ qtile)

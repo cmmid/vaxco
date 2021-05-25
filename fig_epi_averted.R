@@ -1,7 +1,6 @@
 
 suppressPackageStartupMessages({
     require(data.table)
-    require(RSQLite)
     require(ggplot2)
     require(ggh4x)
 })
@@ -9,9 +8,9 @@ suppressPackageStartupMessages({
 .debug <- c("~/Dropbox/Covid-WHO-vax", "4000")
 .args <- if (interactive()) sprintf(c(
     "%s/outputs/epi_quantile.rds",
-    "%s/inputs/config.rds",
+    "%s/outputs/config.rds",
     "%s/figures/averted_%s.png"
-), .debug[1], .debug[2])
+), .debug[1], .debug[2]) else commandArgs(trailingOnly = TRUE)
 
 dosetar <- as.integer(gsub("^.+_(\\d+)\\.(png|pdf)$","\\1",tail(.args, 1)))
 
@@ -24,19 +23,19 @@ scn <- readRDS(.args[2])[, .(
     increasing == TRUE
 ]
 
-epi.dt <- readRDS(.args[1])[id %in% scn$id]
+epi.dt <- readRDS(.args[1])[id %in% scn$id & age == "all"]
 setkeyv(epi.dt,c("id","age","qtile","anni_year"))
 
 agg.dt <- epi.dt[, .(
-    age="all", cases = sum(cases), deaths = sum(death_o),
-    del.cases = sum(cases.del), del.deaths = sum(death_o.del)
-), by=setdiff(key(epi.dt),"age")]
+    cases = cases, deaths = death_o,
+    del.cases = cases.del, del.deaths = death_o.del
+), by = setdiff(key(epi.dt),"age")]
 
 full.dt <- agg.dt[scn, on=.(id)]
 full.dt$strategy_str <- as.numeric(full.dt$strategy_str)
 full.dt[strategy_str == 0, strategy_str := Inf]
 
-full.dt[order(anni_year), c("cdeaths.av","ccases.av") := .(cumsum(del.deaths),cumsum(del.cases)), by=.(id, qtile)]
+full.dt[order(anni_year), c("cdeaths.av","ccases.av") := .(cumsum(del.deaths), cumsum(del.cases)), by=.(id, qtile)]
 
 fig2.dt <- dcast(melt(full.dt[
     qtile != "mn" &
@@ -77,6 +76,7 @@ fig2.p <- ggplot(fig2.dt) + aes(
     scale_color_continuous(
         "Vaccine Protection Expected Duration",
         labels = levels(fig2.dt$vdur),
+        breaks = 1:length(levels(fig2.dt$vdur)),
         guide = "legend", aesthetics = c("color","fill")
     ) +
     scale_x_date(

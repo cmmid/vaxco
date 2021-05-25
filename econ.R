@@ -3,12 +3,12 @@ suppressPackageStartupMessages({
 })
 
 .debug <- c("~/Dropbox/Covid-WHO-vax", "baseline")
-#.debug <- c("~/Dropbox/Covid-WHO-vax/outputs", "0001")
+#.debug <- c("~/Dropbox/Covid-WHO-vax", "03778")
 .args <- if (interactive()) sprintf(c(
     "covid_other_costs.csv",
     "covid_vac_costs_per_dose.csv",
     "daly_scenarios.csv",
-    "%s/inputs/config.rds",
+    "%s/outputs/config.rds",
     ifelse(.debug[2]=="baseline","%s/outputs/sim","%s/outputs/sim/%s.rds"), # for the baseline, will combine several
     "%s/outputs/econ/%s.rds"
 ),.debug[1], .debug[2]) else commandArgs(trailingOnly = TRUE)
@@ -180,7 +180,7 @@ if (!isbaseline) {
     
     # if we aren't looking at one of the base scenarios
     both.dt <- { if (basescn != scn$id) {
-        ref <- readRDS(gsub("\\d+\\.rds","baseline.rds", tail(.args, 1)))[id == basescn][, .(econ_id, sampleId, anni_year, costs, dalys, ccosts, cdalys)]
+        ref <- readRDS(gsub("\\d+\\.rds", "baseline.rds", tail(.args, 1)))[id == basescn][, .(econ_id, sampleId, anni_year, costs, dalys, ccosts, cdalys)]
         inc.dt <- copy(ret.dt)[ref, on=.(econ_id, sampleId, anni_year), .(
             econ_id, id, sampleId, anni_year,
             costs = costs - i.costs, # -cost == savings
