@@ -3,7 +3,7 @@ suppressPackageStartupMessages({
     require(data.table)
 })
 
-.debug <- c("~/Dropbox/Covid-WHO-vax/outputs", "00001")
+.debug <- c("~/Dropbox/Covid-WHO-vax/outputs", "03778")
 .args <- if (interactive()) sprintf(c(
     "%s/sim/%s.rds", "%s/config.rds", "%s/epi_baseline.rds", .debug[2], "%s/epiq/%s.rds"
 ), .debug[1], .debug[2]) else commandArgs(trailingOnly = TRUE)
@@ -36,33 +36,31 @@ if (ref.dt[, !any(id == tarid)]) {
   tar.dt <- scn[,.SD,.SDcols=intcols][
     readRDS(.args[1])[, id := as.integer(tail(.args, 2)[1]) ], on = .(id)
   ][
-    ref.dt[,-"id"], del := i.value - value, on=setdiff(names(ref.dt), c("value", "id"))
-  ][,.(id, sampleId, age, outcome, anni_year, value, del)]
+    ref.dt[,-"id"], cdel := i.value - value, on=setdiff(names(ref.dt), c("value", "id"))
+  ][,.(id, sampleId, age, outcome, anni_year, cv = value, cdel)]
 } else {
-  tar.dt <- ref.dt[id == tarid, .(id, sampleId, age, outcome, anni_year, value, del = NA) ]
+  tar.dt <- ref.dt[id == tarid, .(id, sampleId, age, outcome, anni_year, cv = value, cdel = NA) ]
 }
+
+tar.dt  <- rbind(
+  tar.dt,
+  tar.dt[,.(cv = sum(cv), cdel = sum(cdel), age = "all"), by=.(id, sampleId, outcome, anni_year)]
+)
+tar.dt[order(anni_year), value := c(cv[1], diff(cv)), by=.(id, sampleId, outcome, age)]
+tar.dt[order(anni_year), del := c(cdel[1], diff(cdel)), by=.(id, sampleId, outcome, age)]
 
 #' we want outcomes-wide, quantiles+other keys long, and
 #' incidence values instead of cumulative values
 #'
 #' first get the quantiles
 
-qs.del.dt <- tar.dt[, qtile(del), by=.(id, outcome, age, anni_year)]
-qs.val.dt <- tar.dt[, qtile(value), by=.(id, outcome, age, anni_year)]
-
 reshaper <- function(dt) dcast(
-    melt(dt, id.vars = c("id","outcome","age","anni_year"), variable.name = "qtile"),
-    id + age + anni_year + qtile ~ outcome
-)[
-    order(anni_year), {
-        ret <- lapply(.SD[,-"anni_year"], diff)
-        c(list(anni_year = anni_year[-1]), ret)
-    },
-    by=.(id, age, qtile)
-]
+  melt(dt, id.vars = c("id","outcome","age","anni_year"), variable.name = "qtile"),
+  id + age + anni_year + qtile ~ outcome
+)[anni_year != 0]
 
-del.dt <- reshaper(qs.del.dt[!is.na(outcome)])
-val.dt <- reshaper(qs.val.dt[!is.na(outcome)])
+del.dt <- reshaper(tar.dt[, qtile(del), by=.(id, outcome, age, anni_year)])
+val.dt <- reshaper(tar.dt[, qtile(value), by=.(id, outcome, age, anni_year)])
 
 epi.dt <- merge(val.dt, del.dt, by = c("id","age","qtile","anni_year"), suffixes = c("",".del"))
 
