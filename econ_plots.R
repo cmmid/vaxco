@@ -430,14 +430,14 @@ to.add$strategy_str = 0
 scen.list <- rbindlist(list(scen.list, to.add))
 
 to.add <- base.list
-to.add$scen_name = "Slow roll out: 4000 vaccinees per day no scale-up"
+to.add$scen_name = "Slow roll out: 4K courses per day (no scale-up) for 10 years"
 to.add$strategy_str = 0
 to.add$doses_per_day = 4000
 to.add$increasing = FALSE
 scen.list <- rbindlist(list(scen.list, to.add))
 
 to.add <- base.list
-to.add$scen_name = "Fast roll out: 240K vaccinees per day no scale-up"
+to.add$scen_name = "Fast roll out: 240K courses per day (no scale-up) for 1 year"
 to.add$from_age = 4
 to.add$doses_per_day = 240000
 to.add$increasing = FALSE
