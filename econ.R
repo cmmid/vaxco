@@ -44,7 +44,20 @@ rm(dt)
 increasing <- !is.na(scn$increasing[1]) & scn$increasing[1]
 doses_yr_1 <- (if(increasing) { sum(c(1,4,6,8))/4 } else { 1 })*365  # year 1
 doses_routine <- (if(increasing) { 8 } else { 1 })*365 
-doses_per_anniversary <- c(doses_yr_1, rep(doses_routine, 9))
+doses_per_anniversary <- c(doses_yr_1, rep(doses_routine, scn$horizon[1]))
+
+if (is.na(scn$strategy_str[1])) {
+  doses_per_anniversary <- doses_per_anniversary*0
+} else if (scn$strategy_str[1] == 0) {
+  # no change
+} else {
+  yrs <- floor(scn$strategy_str[1]/365)
+  partial <- scn$strategy_str[1]/365 - floor(scn$strategy_str[1]/365)
+  mul <- rep(0, length(doses_per_anniversary))
+  mul[1:yrs] <- 1
+  if (yrs < length(mul)) mul[yrs+1] <- partial
+  doses_per_anniversary <- doses_per_anniversary * mul
+}
 
 # by perspective
 othercosts <- dcast(fread(.args[1]), perspective ~ name, value.var = "cost")
@@ -112,7 +125,6 @@ econ_digestor <- function(epi.dt, dalys.dt, econ_pars){
            is.na(vax_delay),
            0,
            doses_per_day*doses_per_anniversary[anni_year]/age_cats *
-               ((strategy_str == 0) | (anni_year <= (strategy_str/365))) *
                cost_vac_dose * fifelse(vax_delay == 0, 1, 2)
        ))
     ][,

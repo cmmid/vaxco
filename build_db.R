@@ -55,7 +55,7 @@ scen.dt <- rbind(
 final.dt <- rbind(
   scen.dt,
   copy(scen.dt)[doses_per_day == 4000 & strategy_str == 0 & from_age == 14][, increasing := FALSE ],
-  copy(scen.dt)[doses_per_day == 4000 & strategy_str == 365 & from_age == 4][, increasing := FALSE ][, doses_per_day := 240000 ]
+  copy(scen.dt)[doses_per_day == 4000 & strategy_str == 365 & from_age == 4][, increasing := FALSE ][, doses_per_day := 184000 ][, strategy_str := 180 ]
 )[, id := 1:.N ]
 
 saveRDS(final.dt, tail(.args, 1))
