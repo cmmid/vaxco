@@ -61,7 +61,14 @@ reshaper <- function(dt) dcast(
 
 del.dt <- reshaper(tar.dt[, qtile(del), by=.(id, outcome, age, anni_year)])
 val.dt <- reshaper(tar.dt[, qtile(value), by=.(id, outcome, age, anni_year)])
+cdel.dt <- reshaper(tar.dt[, qtile(cdel), by=.(id, outcome, age, anni_year)])
+cval.dt <- reshaper(tar.dt[, qtile(cv), by=.(id, outcome, age, anni_year)])
 
-epi.dt <- merge(val.dt, del.dt, by = c("id","age","qtile","anni_year"), suffixes = c("",".del"))
+epi.dt <- merge(merge(merge(
+  val.dt, del.dt,
+  by = c("id","age","qtile","anni_year"), suffixes = c("",".del")
+), cdel.dt, by = c("id","age","qtile","anni_year"), suffixes = c("",".cdel")),
+  cval.dt, by = c("id","age","qtile","anni_year"), suffixes = c("",".cval")
+)
 
 saveRDS(epi.dt, tail(.args, 1))

@@ -50,7 +50,7 @@ econ.dt <- dcast(
 epi.dt <- dcast(
     epi.dt, 
     id + age + anni_year ~ qtile,
-    value.var = c("cases","death_o","cases.del","death_o.del")
+    value.var = c("cases","death_o","cases.del","death_o.del","cases.cdel","death_o.cdel","cases.cval","death_o.cval")
 )
 
 # join scenario details
@@ -526,14 +526,14 @@ scen.tab <- scen.dt[,.("Scenario No."=scen_id,"Description"=scen_name,
 # add in cases and deaths averted
 ids <- unique(scen.tab[,id])
 scen.tab <- scen.tab[
-    epi.dt[id %in% ids & anni_year<=t_horizon,
+    epi.dt[age == "all"][id %in% ids & anni_year == t_horizon,
            .("Cases Averted (millions)" = sprintf(
                  "%.1f (%.1f, %.1f)",
-                 sum(cases.del_md)/10^6,sum(cases.del_lo95)/10^6,sum(cases.del_hi95)/10^6
+                 cases.cdel_md/10^6, cases.cdel_lo95/10^6, cases.cdel_hi95/10^6
              ),
              "Deaths Averted (thousands)" = sprintf(
                  "%.1f (%.1f, %.1f)",
-                 sum(death_o.del_md)/10^3,sum(death_o.del_lo95)/10^3,sum(death_o.del_hi95)/10^3
+                 death_o.cdel_md/10^3,death_o.cdel_lo95/10^3,death_o.cdel_hi95/10^3
              )
             ), 
            by=id
