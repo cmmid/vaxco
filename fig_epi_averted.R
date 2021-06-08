@@ -56,7 +56,7 @@ fig2.dt <- dcast(melt(full.dt[
 
 #fig2.dt[, measure := factor(variable, levels = c("ccases.av","cdeaths.av"), ordered = TRUE)]
 
-refdate <- as.Date("2020-04-01")
+refdate <- as.Date("2021-04-01")
 
 fig2.p <- ggplot(fig2.dt) + aes(
     refdate + anni_year*365,
@@ -70,8 +70,8 @@ fig2.p <- ggplot(fig2.dt) + aes(
         from_age = c(`4`="15+",`14`="65+")
     ), switch = "y"
 ) +
-    geom_ribbon(aes(ymin = lo95, ymax = hi95, color = NULL), alpha = 0.2, show.legend = FALSE) +
-    geom_ribbon(aes(ymin = lo50, ymax = hi50, color = NULL), alpha = 0.35, show.legend = FALSE) +
+    geom_ribbon(aes(ymin = lo95, ymax = hi95, color = NULL), alpha = 0.4, show.legend = FALSE) +
+    geom_ribbon(aes(ymin = lo50, ymax = hi50, color = NULL), alpha = 0.4, show.legend = FALSE) +
     geom_line(aes(y=md)) +
     scale_color_continuous(
         "Vaccine Protection Expected Duration",
