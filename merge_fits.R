@@ -15,6 +15,7 @@ nms[1] <- "Inf"
 
 all_fits <- lapply(fls, function(fl) {
     res <- qread(fl)
+    res$par$pop[[1]]$seed_times <- integer()
     res$sample_dynamics <- NULL
     res
 })

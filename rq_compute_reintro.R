@@ -4,10 +4,13 @@ suppressPackageStartupMessages({
     require(qs)
 })
 
-.debug <- c("~/Dropbox/Covid-WHO-vax", "18433")
+#' use the base scenario, 12994
+#' and corresponding non-vax scenario, 18434
+.debug <- c("~/Dropbox/Covid-WHO-vax", "12994")
+#' .debug <- c("~/Dropbox/Covid-WHO-vax", "18434")
 .args <- if (interactive()) sprintf(c(
     "fitd_combined.qs", "epi_data.csv", "mob_data.csv",
-    "%s/inputs/config.rds", .debug[2], "covidm", "%s/outputs/sim/%s.rds"
+    "%s/inputs/config.rds", .debug[2], "covidm", "%s/outputs/exti/%s.rds"
 ), .debug[1], .debug[2]) else commandArgs(trailingOnly = TRUE)
 
 # load epi & mobility data
@@ -186,6 +189,8 @@ keepoutcomes <- c(
   "non_icu_severe_p", "non_icu_critical_p", "icu_critical_p"
 )
 
+cont_intro <- rep(t_vax:fitS$par$time1, each = 10)
+fitS$par$pop[[1]]$seed_times <- cont_intro
 par <- cm_translate_parameters(fitS$par)
 
 # sample from posterior to generate runs
@@ -231,6 +236,7 @@ long.dt <- melt.data.table(
 
 long.dt[, anni_year := (t %/% 365) - 1 ]
 long.dt$t <- NULL
-long.dt$id <- scnid
+
+long.dt[, id := scnid ]
 
 saveRDS(long.dt, tail(.args, 1))

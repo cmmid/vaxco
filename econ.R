@@ -3,7 +3,7 @@ suppressPackageStartupMessages({
 })
 
 .debug <- c("~/Dropbox/Covid-WHO-vax", "baseline")
-#.debug <- c("~/Dropbox/Covid-WHO-vax", "03778")
+#.debug <- c("~/Dropbox/Covid-WHO-vax", "00714")
 .args <- if (interactive()) sprintf(c(
     "covid_other_costs.csv",
     "covid_vac_costs_per_dose.csv",

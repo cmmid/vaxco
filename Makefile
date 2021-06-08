@@ -62,9 +62,13 @@ ${ODIR}/sim/%.rds: compute.R ${DATASRC} ${CONFDB} | ${CMPTH} ${ODIR}/sim
 test/%.rds: test_compute.R ${DATASRC} ${CONFDB} | ${CMPTH} ${ODIR}/sim
 	Rscript $^ $* $(firstword  $|) $@
 
-MINSIM := 18433 18434 18435 18436 18437 18438 18439 18440\
+BASESIM := 18433 18434 18435 18436 18437 18438 18439 18440
+MINSIM := ${BASESIM}\
 09921 12993 16065 09922 12994 16066 09923 12995 16067 09924 12996 16068\
-03778 12865 13122 14018 12930 13026
+03778 12865 13122 14018 12930 13026\
+19146 20170 13506 13002 13010\
+03650 03906 04034 12866 13250 09729\
+00714 09930 00716 09932 03788 13004
 
 minsim: $(patsubst %,${ODIR}/sim/%.rds,${MINSIM})
 
@@ -72,7 +76,7 @@ testsim: ${ODIR}/sim/00001.rds
 
 ECONDATA := covid_other_costs.csv covid_vac_costs_per_dose.csv daly_scenarios.csv
 
-${ODIR}/epi_baseline.rds: epi_baseline.R $(filter-out ${SUMMARIES}, $(wildcard ${ODIR}/sim/*.rds)) | ${ODIR}/sim ${CONFDB}
+${ODIR}/epi_baseline.rds: epi_baseline.R $(patsubst %,${ODIR}/sim/%.rds,${BASESIM}) | ${ODIR}/sim ${CONFDB}
 	Rscript $< $| $@
 
 ${ODIR}/epiq/%.rds: epi_quantile.R ${ODIR}/sim/%.rds ${CONFDB} ${ODIR}/epi_baseline.rds
@@ -95,12 +99,12 @@ epiq: ${ODIR}/epi_quantile.rds
 ECONDATA := covid_other_costs.csv covid_vac_costs_per_dose.csv daly_scenarios.csv
 
 # compute the econ scenarios for each epi scenario - these are quantiles
-${ODIR}/econ/%.rds: econ.R ${ECONDATA} ${CONFDB} ${ODIR}/sim/%.rds | ${ODIR}/econ/baseline.rds
-	Rscript $^ $@
+${ODIR}/econ/%.rds: econ.R ${ECONDATA} ${CONFDB} ${ODIR}/sim/%.rds ${ODIR}/econ/baseline.rds
+	Rscript econ.R ${ECONDATA} ${CONFDB} ${ODIR}/sim/$*.rds $@
 
 # compute all the baseline scenarios - full series, unquantiled
-${ODIR}/econ/baseline.rds: econ.R ${ECONDATA} ${CONFDB} | ${ODIR}/econ
-	Rscript $^ ${ODIR}/sim $@
+${ODIR}/econ/baseline.rds: econ.R ${ECONDATA} ${CONFDB} $(patsubst %,${ODIR}/sim/%.rds,${BASESIM}) | ${ODIR}/econ
+	Rscript econ.R ${ECONDATA} ${CONFDB} ${ODIR}/sim $@
 
 ebaseline: ${ODIR}/econ/baseline.rds
 eone: $(patsubst %,${ODIR}/econ/%.rds,00001)
@@ -154,3 +158,18 @@ ${FDIR}/other_averted_4000.png ${FDIR}/other_averted_4000_non.png: fig_epi_avert
 #	${R}
 
 figs: $(patsubst %,${FDIR}/%.png,baseline averted_4000 other_averted_4000 model_fit)
+
+
+${ODIR}/exti/%.rds: rq_compute_reintro.R ${DATASRC} ${CONFDB} | ${CMPTH} ${ODIR}/exti
+	Rscript $^ $* $(firstword $|) $@
+
+${ODIR}/exto/%.rds: rq_compute_from50.R ${DATASRC} ${CONFDB} | ${CMPTH} ${ODIR}/exto
+	Rscript $^ $* $(firstword $|) $@
+
+${ODIR}/exti/q_%.rds: epi_quantile.R ${ODIR}/exti/%.rds ${CONFDB} ${ODIR}/exti/18434.rds | ${ODIR}/extq
+	Rscript $^ $* $@
+
+${ODIR}/exto/q_%.rds: epi_quantile.R ${ODIR}/exto/%.rds ${CONFDB} ${ODIR}/sim/18434.rds | ${ODIR}/extq
+	Rscript $^ $* $@
+
+rqs: ${ODIR}/exti/q_12994.rds ${ODIR}/exto/q_12994.rds

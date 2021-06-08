@@ -8,9 +8,9 @@ suppressPackageStartupMessages({
 .debug <- c("~/Dropbox/Covid-WHO-vax", "4000")
 .args <- if (interactive()) sprintf(c(
     "%s/outputs/epi_quantile.rds",
-    "%s/inputs/config.rds",
+    "%s/outputs/config.rds",
     "%s/figures/other_averted_%s.png"
-), .debug[1], .debug[2])
+), .debug[1], .debug[2]) else commandArgs(trailingOnly = TRUE)
 
 dosetar <- as.integer(gsub("^.+_(\\d+)\\.(png|pdf)$","\\1",tail(.args, 1)))
 

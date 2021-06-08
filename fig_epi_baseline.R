@@ -21,10 +21,10 @@ scn <- readRDS(.args[2])[, .(
 epi.dt <- readRDS(.args[1])[id %in% scn$id]
 setkey(epi.dt, id, age, qtile, anni_year)
 
-agg.dt <- epi.dt[, .(
-    age="all", cases = sum(cases), deaths = sum(death_o),
-    del.cases = sum(cases.del), del.deaths = sum(death_o.del)
-), by=setdiff(key(epi.dt),"age")]
+agg.dt <- epi.dt[age=="all", .(
+    cases, deaths = death_o,
+    del.cases = cases.del, del.deaths = death_o.del
+), by=.(id, qtile, anni_year)]
 
 full.dt <- agg.dt[scn, on=.(id)]
 

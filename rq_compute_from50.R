@@ -4,10 +4,12 @@ suppressPackageStartupMessages({
     require(qs)
 })
 
-.debug <- c("~/Dropbox/Covid-WHO-vax", "18433")
+#' use the base scenario, 12994
+#' already have corresponding non-vax scenario, 18434
+.debug <- c("~/Dropbox/Covid-WHO-vax", "12994")
 .args <- if (interactive()) sprintf(c(
     "fitd_combined.qs", "epi_data.csv", "mob_data.csv",
-    "%s/inputs/config.rds", .debug[2], "covidm", "%s/outputs/sim/%s.rds"
+    "%s/inputs/config.rds", .debug[2], "covidm", "%s/outputs/exto/%s.rds"
 ), .debug[1], .debug[2]) else commandArgs(trailingOnly = TRUE)
 
 # load epi & mobility data
@@ -26,6 +28,11 @@ outfile <- tail(.args, 1)
 # (how many doses to which age groups, when)
 scen.dt <- as.list(readRDS(scndb)[id == scnid])
 scen.dt$n_samples <- 100
+
+# switch to from 50+
+scen.dt$from_age <- 11
+
+
 #' @example 
 #' scen.dt$n_samples <- 5
 #' TODO pull from pars table?
@@ -35,6 +42,8 @@ natwaning_key <- sprintf("%.1f", scen.dt$nat_imm_dur_days/365)
 
 # load fitted model for Sindh, match to scenario waning assumption
 fitS = qread(.args[1])[[natwaning_key]]
+
+fitS$par$pop[[1]]$seed_times <- numeric()
 
 # load covidm
 cm_force_rebuild = F;
@@ -231,6 +240,7 @@ long.dt <- melt.data.table(
 
 long.dt[, anni_year := (t %/% 365) - 1 ]
 long.dt$t <- NULL
-long.dt$id <- scnid
+
+long.dt[, id := scnid ]
 
 saveRDS(long.dt, tail(.args, 1))

@@ -5,13 +5,13 @@ suppressPackageStartupMessages({
     require(qs)
 })
 
-.debug <- "~/Dropbox/Covid-WHO-vax/outputs"
+.debug <- "~/Dropbox/Covid-WHO-vax"
 .args <- if (interactive()) sprintf(c(
-    "%s/sim_model.rds",
+    "%s/outputs/sim_model.rds",
     "data_fitting/epi_data.csv", #" data_fitting/epi_data.rds",# 
     "fitd_combined.qs",
     "%s/figures/model_fit.png"
-), .debug)
+), .debug) else commandArgs(trailingOnly = TRUE)
 
 all.dyn <- readRDS(.args[1])
 

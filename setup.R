@@ -43,7 +43,9 @@ fitS$user_defined$model_v2$cpp_observer <- c(
 fitS$user_defined$model_v2$cpp_changes <- c(
     'for (auto& u : P.pop[0].u) u *= x[1];',
     'for (auto& u : P.pop[0].uv) u *= x[1];',
-    'P.pop[0].seed_times = vector<double>(10, (int)x[0]);'
+    'vector<double> introduction(10, (int)x[0]);',
+    'introduction.insert(introduction.begin(), P.pop[0].seed_times.begin(), P.pop[0].seed_times.end());',
+    'P.pop[0].seed_times = introduction;'
 )
 
 #' TODO - this will misbehave on HPC - fix along with parameter checking

@@ -19,7 +19,11 @@ scn <- readRDS(.args[2])[, .(
     start_timing, vax_delay, doses_per_day, strategy_str, from_age,
     vax_mech, eff_mech, increasing
 )][
-    doses_per_day == dosetar &
+    strategy != "none" & start_timing == 18718 &
+    doses_per_day == dosetar & vax_delay == 30 &
+    vax_eff == 0.7 & nat_imm_dur_days == round(2.5*365) &
+    strategy_str == 365 &
+    vax_mech == "infection" & eff_mech == "allornothing" &
     increasing == TRUE
 ]
 
@@ -28,14 +32,13 @@ setkeyv(epi.dt,c("id","age","qtile","anni_year"))
 
 agg.dt <- epi.dt[, .(
     cases = cases, deaths = death_o,
-    del.cases = cases.del, del.deaths = death_o.del
+    del.cases = cases.del, del.deaths = death_o.del,
+    ccases.av = cases.cdel, cdeaths.av = death_o.cdel
 ), by = setdiff(key(epi.dt),"age")]
 
 full.dt <- agg.dt[scn, on=.(id)]
 full.dt$strategy_str <- as.numeric(full.dt$strategy_str)
 full.dt[strategy_str == 0, strategy_str := Inf]
-
-full.dt[order(anni_year), c("cdeaths.av","ccases.av") := .(cumsum(del.deaths), cumsum(del.cases)), by=.(id, qtile)]
 
 fig2.dt <- dcast(melt(full.dt[
     qtile != "mn" &
