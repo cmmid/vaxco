@@ -129,23 +129,23 @@ simmodel: ${ODIR}/sim_model.rds
 
 
 
-
+FIGEXT ?= png
 
 # MT FIG2 - validation figure
-${FDIR}/baseline.png: fig_epi_baseline.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
+${FDIR}/baseline.${FIGEXT}: fig_epi_baseline.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
 	${R}
 
 # MT FIG3 - cases/deaths averted for initial 4000k doses per day, allornothing-infection vaccine
 # 2.5 year natural immunity, varying vaccine immunity duration
-${FDIR}/averted_4000.png: fig_epi_averted.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
+${FDIR}/averted_4000.${FIGEXT}: fig_epi_averted.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
 	${R}
 
-${FDIR}/model_fit.png ${FDIR}/model_fit_ext.png: fig_model_fit.R ${ODIR}/sim_model.rds data_fitting/epi_data.csv fitd_combined.qs
+${FDIR}/model_fit.${FIGEXT} ${FDIR}/model_fit_ext.${FIGEXT}: fig_model_fit.R ${ODIR}/sim_model.rds data_fitting/epi_data.csv fitd_combined.qs
 	${R}
 
 # SI FIG S4 S5 - hosp outcomes averted for initial 4000k doses per day, allornothing-infection vaccine
 # 2.5 year natural immunity, varying vaccine immunity duration
-${FDIR}/other_averted_4000.png ${FDIR}/other_averted_4000_non.png: fig_epi_averted_other.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
+${FDIR}/other_averted_4000.${FIGEXT} ${FDIR}/other_averted_4000_non.${FIGEXT}: fig_epi_averted_other.R ${ODIR}/epi_quantile.rds ${CONFDB} | ${FDIR}
 	${R}
 
 #${FDIR}/incremental.png: fig_incremental.R ${IDIR}/scenarios.rds ${ODIR}/quantiles.rds ${ODIR}/baseline.rds
@@ -157,7 +157,7 @@ ${FDIR}/other_averted_4000.png ${FDIR}/other_averted_4000_non.png: fig_epi_avert
 #${FDIR}/icer.png: fig_icer.R ${IDIR}/config_high.sqlite ${ODIR}/icer.rds
 #	${R}
 
-figs: $(patsubst %,${FDIR}/%.png,baseline averted_4000 other_averted_4000 model_fit)
+figs: $(patsubst %,${FDIR}/%.${FIGEXT},baseline averted_4000 other_averted_4000 model_fit)
 
 
 ${ODIR}/exti/%.rds: rq_compute_reintro.R ${DATASRC} ${CONFDB} | ${CMPTH} ${ODIR}/exti

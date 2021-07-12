@@ -1,4 +1,6 @@
 
+figext <- "tiff"
+
 require(data.table)
 require(ggplot2)
 
@@ -225,7 +227,7 @@ plt.costs <- function(meas = "costs_md",
 plot.costs <- plt.costs(t_horizon=t_horizon)
 plot.cum.costs <- plt.costs(meas="ccosts_md", lbl="Cumulative Incremental Cost ($)",t_horizon=t_horizon)
 
-tarfile <- sprintf("%sfig2_cost_plot_%s_time-horizon.png",path.fig,t_horizon)
+tarfile <- sprintf("%sfig2_cost_plot_%s_time-horizon.%s",path.fig,t_horizon,figext)
 ggsave(tarfile, plot.costs, width = 7.5, height = 6, units = "in")
 
 # plot of incremental dalys
@@ -284,7 +286,7 @@ plt.dalys <- function(meas = "dalys_md",
 plot.dalys <- plt.dalys(t_horizon=t_horizon)
 plot.cum.dalys <- plt.dalys(meas="cdalys_md", lbl="Cumulative DALYs Averted",t_horizon=t_horizon)
 
-tarfile <- sprintf("%sfig3_daly_plot_%s_time-horizon.png",path.fig,t_horizon)
+tarfile <- sprintf("%sfig3_daly_plot_%s_time-horizon.%s",path.fig,t_horizon,figext)
 ggsave(tarfile, plot.cum.dalys, width = 7.5, height = 6, units = "in")
 
 # plot of ICERS
@@ -343,7 +345,7 @@ plt.icers1 <- function(meas = "icer_md",
 
 plot.icers1 <- plt.icers1(t_horizon=t_horizon)
 
-tarfile <- sprintf("%ssup_fig_icer_plot1_%s_time-horizon.png",path.fig,t_horizon)
+tarfile <- sprintf("%ssup_fig_icer_plot1_%s_time-horizon.%s",path.fig,t_horizon,figext)
 ggsave(tarfile, plot.icers1, width = 7.5, height = 6, units = "in")
 
 
@@ -401,7 +403,7 @@ plt.icers2 <- function(meas = "icer_md",
 
 plot.icers2 <- plt.icers2(t_horizon=t_horizon)
 
-tarfile <- sprintf("%ssup_fig_icer_plot2_%s_time-horizon.png",path.fig,t_horizon)
+tarfile <- sprintf("%ssup_fig_icer_plot2_%s_time-horizon.%s",path.fig,t_horizon,figext)
 ggsave(tarfile, plot.icers2, width = 7.5, height = 6, units = "in")
 
 # Scenarios table

@@ -9,10 +9,10 @@ suppressPackageStartupMessages({
 .args <- if (interactive()) sprintf(c(
     "%s/outputs/epi_quantile.rds",
     "%s/outputs/config.rds",
-    "%s/figures/averted_%s.png"
+    "%s/figures/averted_%s.tiff"
 ), .debug[1], .debug[2]) else commandArgs(trailingOnly = TRUE)
 
-dosetar <- as.integer(gsub("^.+_(\\d+)\\.(png|pdf)$","\\1",tail(.args, 1)))
+dosetar <- as.integer(gsub("^.+_(\\d+)\\.(png|pdf|tiff)$","\\1",tail(.args, 1)))
 
 scn <- readRDS(.args[2])[, .(
     id, strategy, vax_eff, nat_imm_dur_days, vax_imm_dur_days,
